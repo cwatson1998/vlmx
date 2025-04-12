@@ -13,12 +13,12 @@ import base64
 from PIL import Image
 import anthropic
 from openai import OpenAI
- 
 
 
 def setup_gemini(model_name, system_instruction=None, api_key=None):
-    logging.info(f"Setting up Google's model {model_name} with API key {api_key}")
-    api_key = api_key or os.environ.get("API_KEY")
+    logging.info(
+        f"Setting up Google's model {model_name} with API key {api_key}")
+    api_key = api_key or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         return None
 
@@ -29,23 +29,23 @@ def setup_gemini(model_name, system_instruction=None, api_key=None):
         model_name,
         system_instruction=system_instruction,
     )
-
-
 
 
 def setup_vlm_model(model_name, system_instruction=None, api_key=None):
     logging.info(f"Setting up VLM's model {model_name} with API key {api_key}")
-    if "gpt" in model_name or 'o' in model_name:
-        return setup_gpt(model_name, system_instruction, api_key)
-    elif "gemini" in model_name:
+    if "gemini" in model_name:
         return setup_gemini(model_name, system_instruction, api_key)
     elif "claude" in model_name:
         return setup_claude(model_name, system_instruction, api_key)
+    elif "gpt" in model_name or 'o' in model_name:
+        return setup_gpt(model_name, system_instruction, api_key)
     else:
-        raise ValueError("Model name must contain 'gpt' `claude` or `o` or 'gemini'. Got: {}".format(model_name))
+        raise ValueError(
+            "Model name must contain 'gpt' `claude` or `o` or 'gemini'. Got: {}".format(model_name))
+
 
 def setup_gemini(model_name, system_instruction=None, api_key=None):
-    api_key = api_key or os.environ.get("API_KEY")
+    api_key = api_key or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         return None
 
@@ -56,8 +56,6 @@ def setup_gemini(model_name, system_instruction=None, api_key=None):
         model_name,
         system_instruction=system_instruction,
     )
-
-
 
 
 class ClaudeWrapper:
@@ -66,7 +64,7 @@ class ClaudeWrapper:
         self.system_instruction = system_instruction
         self.api_key = api_key
         self.client = anthropic.Anthropic(api_key=self.api_key)
-    
+
     def _encode_image_to_base64(self, pil_image):
         """Convert PIL Image to base64 string"""
         buffered = BytesIO()
@@ -80,9 +78,9 @@ class ClaudeWrapper:
         """Format content for Claude API, handling both text and images"""
         if not isinstance(prompt_parts, list):
             return [{"type": "text", "text": prompt_parts}]
-        
+
         formatted_content = []
-        
+
         for part in prompt_parts:
             if isinstance(part, str):
                 formatted_content.append({
@@ -101,15 +99,15 @@ class ClaudeWrapper:
                 })
             elif isinstance(part, dict):
                 formatted_content.append(part)
-        
+
         return formatted_content
-    
+
     def generate_content(self, prompt_parts, generation_config={}):
         temperature = generation_config.get("temperature", 0)
         max_tokens = generation_config.get("max_tokens", 3072)
-        
+
         formatted_content = self._format_content(prompt_parts)
-        
+
         message = self.client.messages.create(
             model=self.model_name,
             max_tokens=max_tokens,
@@ -123,38 +121,37 @@ class ClaudeWrapper:
             ]
         )
         print(">>> USAGE", message.usage)
-        
+
         class MockResponse:
             def __init__(self, text):
                 self.text = text
-        
+
         return MockResponse(message.content[0].text)
-    
+
 
 def setup_claude(model_name, system_instruction=None, api_key=None):
     """
     Setup function for Claude models.
-    
+
     Args:
         model_name (str): Name of the Claude model (e.g., "claude-3-opus-20240229")
         system_instruction (str, optional): System instruction for the model
         api_key (str, optional): Anthropic API key. If not provided, will look for ANTHROPIC_API_KEY in environment
-        
+
     Returns:
         ClaudeWrapper or None: Initialized wrapper if successful, None if no API key available
     """
-    logging.info(f"Setting up Claude's model {model_name} with API key {api_key}")
-    api_key = api_key or os.environ.get("API_KEY")
+    logging.info(
+        f"Setting up Claude's model {model_name} with API key {api_key}")
+    api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return None
-    
+
     return ClaudeWrapper(
         model_name=model_name,
         system_instruction=system_instruction,
         api_key=api_key
     )
-
-
 
 
 class GPTWrapper:
@@ -179,7 +176,7 @@ class GPTWrapper:
             return prompt_parts  # Return as is if it's just a string
 
         formatted_content = []
-        
+
         for part in prompt_parts:
             if isinstance(part, str):
                 formatted_content.append(part)
@@ -196,15 +193,15 @@ class GPTWrapper:
             elif isinstance(part, dict) and part.get("type") == "image_url":
                 # If it's already in the correct format, pass it through
                 formatted_content.append(part)
-        
+
         return formatted_content
 
     def generate_content(self, prompt_parts, generation_config={}):
         temperature = generation_config.get("temperature", 0.5)
-        
+
         # Format the content for OpenAI
         formatted_content = self._format_content(prompt_parts)
-        
+
         completion = self.client.chat.completions.create(
             model=self.model_name,
             messages=[
@@ -213,29 +210,27 @@ class GPTWrapper:
                 {"role": "user", "content": formatted_content},
             ],
             temperature=temperature)
-            
+
         # Format response to match Gemini's format
         response_text = completion.choices[0].message.content
-        
+
         # Create a MockResponse class to mimic the structure expected by parse_response
         class MockResponse:
             def __init__(self, text):
                 self.text = text
         return MockResponse(response_text)
 
+
 def setup_gpt(model_name, system_instruction=None, api_key=None):
-    logging.info(f"Setting up OpenAI's model {model_name} with API key {api_key}")
-    api_key = api_key or os.environ.get("API_KEY")
+    logging.info(
+        f"Setting up OpenAI's model {model_name} with API key {api_key}")
+    api_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
-    
-    return GPTWrapper(model_name=model_name, 
-                      system_instruction=system_instruction, 
+
+    return GPTWrapper(model_name=model_name,
+                      system_instruction=system_instruction,
                       api_key=api_key)
-    
-
-
-
 
 
 def save_prompt_parts_as_html(prompt_parts, html_file_path):
@@ -306,8 +301,6 @@ def prompt_parts_to_html(prompt_parts, max_image_width=300, max_image_height=300
 def to_markdown(text):
     text = text.replace("•", "  *")
     return textwrap.indent(text, "> ", predicate=lambda _: True)
-
-
 
 
 def remove_lines_containing(content: str, keyword: str) -> str:

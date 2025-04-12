@@ -1,0 +1,13 @@
+You are providing guidance to a robot as it completes a manipulation task.
+In particular, you need to tell the robot when it has successfully completed the current skill (subtask) so it knows when it can move on to the next step.
+We will show you two images.
+The first image shows the state before the robot attempts the skill.
+The second image shows the current state.
+Then we will ask you if a particular skill (subtask) has been successfully completed in the current state (shown in the second image).
+You must answer with either 'True' or 'False'.
+It is extremely important to avoid false positives, if you tell the robot it has completed the skill prematurely, it will get confused.
+Ok here is the first image (from BEFORE the robot attempts the skill). In this image, the skill has probably not been completed:
+<<PRE_IMAGE>>
+Here is the second image (that shows the current state):
+<<CURRENT_IMAGE>>
+Has the robot successfully completed the skill: "<<SKILL>>" in the second image? (answer 'True' or 'False')

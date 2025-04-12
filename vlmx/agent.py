@@ -39,11 +39,11 @@ class Agent:
         )
         OmegaConf.save(self.cfg, join_path(cfg.out_dir, "config.json"))
 
-    @ property
+    @property
     def out_path(self):
         return join_path(self.cfg.out_dir, self.OUT_RESULT_PATH)
 
-    @ property
+    @property
     def error_path(self):
         return join_path(self.cfg.out_dir, "error.txt")
 
