@@ -41,6 +41,8 @@ except ImportError:
 
 faulthandler.enable()
 
+RESET_JOINTS_DOWNWARD = np.array([0, -1 / 5 * np.pi, 0, -4 / 5 * np.pi, 0, 3 / 5 * np.pi, 0.0])
+RESET_JOINTS_OUTWARD = np.array([-0.0167203, -0.22184323, 0.01463179, -2.4473877, -0.01777307, 3.62010765, -0.0041602])
 
 def deduplicated_list(lst):
     """Remove duplicates from a list while preserving order."""
@@ -81,6 +83,7 @@ class Args:
     left_camera_id: str = "25455306"  # e.g., "24259877"
     right_camera_id: str = "27085680"  # fix: "27085680"  move: # "26368109"
     wrist_camera_id: str = "14436910"  # e.g., "13062452"
+    reset_joints: str | None = None
 
     # Policy parameters
     external_camera: str | None = (
@@ -170,8 +173,20 @@ def main(args: Args):
     ), f"Please specify an external camera to use for the policy, choose from ['left', 'right'], but got {args.external_camera}"
 
     # Initialize the Panda environment. Using joint velocity action space and gripper position action space is very important.
-    env = RobotEnv(action_space="joint_velocity",
-                   gripper_action_space="position")
+    if args.reset_joints is None:
+        env = RobotEnv(action_space="joint_velocity",
+                    gripper_action_space="position")
+    else:
+        if args.reset_joints == "downward":
+            reset_joints = RESET_JOINTS_DOWNWARD
+        elif args.reset_joints == "outward":
+            reset_joints = RESET_JOINTS_OUTWARD
+        else:
+            raise ValueError(
+                f"Invalid reset joints option: {args.reset_joints}. Choose from ['downward', 'outward']")
+        env = RobotEnv(action_space="joint_velocity",
+                    gripper_action_space="position", reset_joints=reset_joints)
+
     print("Created the droid env!")
 
     # Connect to the policy server
@@ -302,7 +317,7 @@ def main(args: Args):
                         agent=vlm_agent,
                         skill=instruction,
                         current_image=current_pil_image,
-                        as_bool=False)
+                        return_bool=False)
                     print(f"The VLM says: {is_completed_message}")
 
                 new_instruction = input(
