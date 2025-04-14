@@ -41,8 +41,12 @@ except ImportError:
 
 faulthandler.enable()
 
-RESET_JOINTS_DOWNWARD = np.array([0, -1 / 5 * np.pi, 0, -4 / 5 * np.pi, 0, 3 / 5 * np.pi, 0.0])
-RESET_JOINTS_OUTWARD = np.array([-0.0167203, -0.22184323, 0.01463179, -2.4473877, -0.01777307, 3.62010765, -0.0041602])
+INSTRUCTION_SEPARATOR = "|"
+RESET_JOINTS_DOWNWARD = np.array(
+    [0, -1 / 5 * np.pi, 0, -4 / 5 * np.pi, 0, 3 / 5 * np.pi, 0.0])
+RESET_JOINTS_OUTWARD = np.array(
+    [-0.0167203, -0.22184323, 0.01463179, -2.4473877, -0.01777307, 3.62010765, -0.0041602])
+
 
 def deduplicated_list(lst):
     """Remove duplicates from a list while preserving order."""
@@ -109,10 +113,15 @@ class Args:
 
     # Video
     superimpose_instruction: bool = True
-    instruction_frequency: int = 50  # How often to ask user for new instruction
+    # How often to ask user for new instruction (and to check if skill is completed, if using VLM 'sequencing_model)
+    instruction_frequency: int = 50
 
     # Sequencing model
+    # This can be a vlm, for example "gpt-4o" or "gemini-2.0-flash".
     sequencing_model: str | None = None
+    sequencing_prompt: str | None = None  # Relative path to prompt
+    # How many times in a row to see the positive VLM signal to conclude that the skill is completed.
+    auto_sequencing_positive_count: int | None = None
 
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
 # waiting for a new action chunk, it will raise an exception and the server connection dies.
@@ -150,6 +159,20 @@ def save_visualization_snapshot(fig, save_path):
         print(f"Failed to save visualization snapshot: {e}")
 
 
+def get_instructions(user_message=None):
+    if user_message is None:
+        user_message = f"Enter instruction (or list of instructions separated by {INSTRUCTION_SEPARATOR}): "
+    user_input = input(user_message)
+
+    if INSTRUCTION_SEPARATOR in user_input:
+        instructions = user_input.split(INSTRUCTION_SEPARATOR)
+    else:
+        instructions = [user_input]
+    instruction = instructions[0]
+    future_instructions = instructions[1:]
+    return instruction, future_instructions
+
+
 def main(args: Args):
     if args.sequencing_model is not None:
         load_dotenv()
@@ -175,7 +198,7 @@ def main(args: Args):
     # Initialize the Panda environment. Using joint velocity action space and gripper position action space is very important.
     if args.reset_joints is None:
         env = RobotEnv(action_space="joint_velocity",
-                    gripper_action_space="position")
+                       gripper_action_space="position")
     else:
         if args.reset_joints == "downward":
             reset_joints = RESET_JOINTS_DOWNWARD
@@ -185,7 +208,7 @@ def main(args: Args):
             raise ValueError(
                 f"Invalid reset joints option: {args.reset_joints}. Choose from ['downward', 'outward']")
         env = RobotEnv(action_space="joint_velocity",
-                    gripper_action_space="position", reset_joints=reset_joints)
+                       gripper_action_space="position", reset_joints=reset_joints)
 
     print("Created the droid env!")
 
@@ -213,7 +236,7 @@ def main(args: Args):
         f.write("## Results\n\n")
 
     while True:
-        instruction = input("Enter instruction: ")
+        instruction, future_instructions = get_instructions()
 
         # Rollout parameters
         actions_from_chunk_completed = 0
@@ -224,8 +247,8 @@ def main(args: Args):
 
         joint_position_file = f"results/log/{date}/eval_{main_category}_{timestamp}_joints.csv"
         # Create a filename-safe version of the instruction
-        safe_instruction = instruction.replace(
-            " ", "_").replace("/", "_").replace("\\", "_")
+        # safe_instruction = instruction.replace(
+        #     " ", "_").replace("/", "_").replace("\\", "_")
         video = []
         # Added so we can keep track of instruction changing over time.
         instructions = []
@@ -320,8 +343,11 @@ def main(args: Args):
                         return_bool=False)
                     print(f"The VLM says: {is_completed_message}")
 
-                new_instruction = input(
-                    "Enter new instruction: (enter '' to keep current instruction). To provide empty string as intr, enter '<empty>' ")
+                user_message = "Enter new instruction: (enter '' to keep current instruction). To provide empty string as instr, enter '<empty>' "
+                # new_instruction = input(user_message)
+                new_instruction, new_future_instructions = get_instructions(
+                    user_message=user_message)
+                # TODO: Make this logic happen whenever we move on to the next instruction
                 if new_instruction == '':
                     instruction = instruction
                 elif new_instruction == '<empty>':
@@ -529,8 +555,10 @@ def main(args: Args):
 
                 env.step(action)  # droid actually apply the action
             except KeyboardInterrupt:
-                instruction = input(
-                    "Enter 'zzz' to end episode. Otherwise, enter new instruction to continue: ")
+                user_message_keyboard_interrupt = "Enter 'zzz' to end episode. Otherwise, enter new instruction to continue: "
+                # instruction = input(user_message_keyboard_interrupt)
+                instruction, future_instructions = get_instructions(
+                    user_message=user_message_keyboard_interrupt)
                 if instruction == 'zzz':
                     print("Ending episode!")
                     break
