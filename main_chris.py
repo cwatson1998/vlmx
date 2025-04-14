@@ -119,9 +119,10 @@ class Args:
     # Sequencing model
     # This can be a vlm, for example "gpt-4o" or "gemini-2.0-flash".
     sequencing_model: str | None = None
-    sequencing_prompt: str | None = None  # Relative path to prompt
+    # Relative path to prompt # Not quite implemented robustly. (TODO)
+    sequencing_prompt: str | None = None
     # How many times in a row to see the positive VLM signal to conclude that the skill is completed.
-    auto_sequencing_positive_count: int | None = None
+    auto_sequencing_positive_count: int | None = None  # Not implemented.
 
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
 # waiting for a new action chunk, it will raise an exception and the server connection dies.
@@ -336,11 +337,29 @@ def main(args: Args):
                     current_pil_image = Image.fromarray(video[-1])
                     print(
                         f"We are querying {args.sequencing_model} to see if {instruction} is completed")
-                    is_completed_message = prompt_construction.check_skill_completion(
-                        agent=vlm_agent,
-                        skill=instruction,
-                        current_image=current_pil_image,
-                        return_bool=False)
+                    # TODO: Make this if-elif more reasonable
+                    if args.sequencing_prompt == 'skill_completion':
+                        is_completed_message = prompt_construction.check_skill_completion(
+                            agent=vlm_agent,
+                            skill=instruction,
+                            current_image=current_pil_image,
+                            return_bool=False)
+                    elif args.sequencing_prompt == 'skill_sequencing_two_choices':
+                        if len(future_instructions) > 0:
+                            is_completed_message = prompt_construction.check_skill_sequencing_two_choices(
+                                agent=vlm_agent,
+                                skill=instruction,
+                                current_image=current_pil_image,
+                                next_skill=future_instructions[0],
+                                return_bool=False)
+                        else:
+                            print(
+                                "No future_instructions left! We will check if the skill is completed using skill_completion prompt")
+                            is_completed_message = prompt_construction.check_skill_completion(
+                                agent=vlm_agent,
+                                skill=instruction,
+                                current_image=current_pil_image,
+                                return_bool=False)
                     print(f"The VLM says: {is_completed_message}")
 
                 user_message = "Enter new instruction: (enter '' to keep current instruction). To provide empty string as instr, enter '<empty>' "
@@ -355,6 +374,15 @@ def main(args: Args):
                 elif new_instruction == 'zzz':
                     print("Ending episode!")
                     break
+                elif new_instruction == 'xxx':
+                    if len(future_instructions) > 0:
+                        instruction = future_instructions[0]
+                        future_instructions = future_instructions[1:]
+                    else:
+                        # TODO:In the future I should make this a loop.
+                        print(
+                            "No future instructions left! We will keep the same instruction")
+                        instruction = instruction
                 else:
                     instruction = new_instruction
                     print(f"Switching to instruction '{instruction}'")
