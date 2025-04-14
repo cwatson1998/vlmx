@@ -253,6 +253,7 @@ def main(args: Args):
         video = []
         # Added so we can keep track of instruction changing over time.
         instructions = []
+        skill_completion_notes = []
         wrist_video = []  # New list for wrist camera frames
 
         # Add data storage for plotting and JSON history
@@ -330,6 +331,7 @@ def main(args: Args):
         bar = tqdm.tqdm(range(args.max_timesteps))
         print("Running rollout... press Ctrl+C to stop early (or manually change prompt)")
         for t_step in bar:
+            skill_completion_note = ""
             if t_step > 0 and t_step % args.instruction_frequency == 0:
                 if args.sequencing_model is not None:
                     assert len(
@@ -361,6 +363,7 @@ def main(args: Args):
                                 current_image=current_pil_image,
                                 return_bool=False)
                     print(f"The VLM says: {is_completed_message}")
+                    skill_completion_note = f"{args.sequencing_model} with {args.sequencing_prompt}:\n  {instruction}: {is_completed_message}"
 
                 user_message = "Enter new instruction: (enter '' to keep current instruction). To provide empty string as instr, enter '<empty>' "
                 # new_instruction = input(user_message)
@@ -396,7 +399,7 @@ def main(args: Args):
                 video.append(curr_obs[f"{args.external_camera}_image"])
                 wrist_video.append(curr_obs["wrist_image"])
                 instructions.append(instruction)
-
+                skill_completion_notes.append(skill_completion_note)
                 # Store joint positions for visualization
                 joint_positions.append(curr_obs["joint_position"])
 
@@ -762,8 +765,11 @@ def main(args: Args):
         if args.superimpose_instruction:
             assert len(combined_video) == len(
                 instructions), f"Got {len(combined_video)} frames but {len(instructions)} instructions."
+            assert len(combined_video) == len(
+                skill_completion_notes), f"Got {len(combined_video)} frames but {len(skill_completion_notes)} skill_completion_notes."
             for instr_i, instr in enumerate(instructions):
                 # Convert frame from RGB to BGR (OpenCV uses BGR)
+                skill_completion_note = skill_completion_notes[instr_i]
                 frame_bgr = cv2.cvtColor(
                     combined_video[instr_i], cv2.COLOR_RGB2BGR)
 
@@ -778,6 +784,20 @@ def main(args: Args):
                     thickness=2,
                     lineType=cv2.LINE_AA
                 )
+                # Split skill completion note into lines and add each line below the previous
+                skill_completion_lines = skill_completion_note.split('\n')
+                for line_i, line in enumerate(skill_completion_lines):
+                    cv2.putText(
+                        frame_bgr,
+                        line,
+                        # x, y position of text, increment y by 30 pixels for each line
+                        org=(10, 60 + line_i*30),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                        fontScale=1,
+                        color=(255, 255, 255),  # white text
+                        thickness=2,
+                        lineType=cv2.LINE_AA
+                    )
 
                 # Convert back to RGB
                 combined_video[instr_i] = cv2.cvtColor(

@@ -1,0 +1,9 @@
+You are providing guidance to a robot as it completes a manipulation task.
+In particular, you need to tell the robot when it has successfully completed the current skill (subtask) so it knows when it can move on to the next skill.
+We will show you an image that shows the current scene, and we will also tell you which skill the robot is currently trying to perform, and which skill the robot needs to perform once it completes the first skill.
+If the robot has completed the current skill and should move on to the next one, say 'True'
+If the robot has not yet completed the current skill, say 'False'
+Ok here is the image of the current state:
+<|>CURRENT_IMAGE<|>
+If it looks like the robot has successfully completed the current skill "<|>SKILL<|>" and it is ready to move on to the next skill "<|>NEXT SKILL<|>" say 'True'
+Please respond with either 'True' or 'False'.
