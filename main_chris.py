@@ -41,8 +41,12 @@ except ImportError:
 
 faulthandler.enable()
 
-RESET_JOINTS_DOWNWARD = np.array([0, -1 / 5 * np.pi, 0, -4 / 5 * np.pi, 0, 3 / 5 * np.pi, 0.0])
-RESET_JOINTS_OUTWARD = np.array([-0.0167203, -0.22184323, 0.01463179, -2.4473877, -0.01777307, 3.62010765, -0.0041602])
+INSTRUCTION_SEPARATOR = "|"
+RESET_JOINTS_DOWNWARD = np.array(
+    [0, -1 / 5 * np.pi, 0, -4 / 5 * np.pi, 0, 3 / 5 * np.pi, 0.0])
+RESET_JOINTS_OUTWARD = np.array(
+    [-0.0167203, -0.22184323, 0.01463179, -2.4473877, -0.01777307, 3.62010765, -0.0041602])
+
 
 def deduplicated_list(lst):
     """Remove duplicates from a list while preserving order."""
@@ -109,10 +113,16 @@ class Args:
 
     # Video
     superimpose_instruction: bool = True
-    instruction_frequency: int = 50  # How often to ask user for new instruction
+    # How often to ask user for new instruction (and to check if skill is completed, if using VLM 'sequencing_model)
+    instruction_frequency: int = 50
 
     # Sequencing model
+    # This can be a vlm, for example "gpt-4o" or "gemini-2.0-flash".
     sequencing_model: str | None = None
+    # Relative path to prompt # Not quite implemented robustly. (TODO)
+    sequencing_prompt: str | None = 'skill_completion'
+    # How many times in a row to see the positive VLM signal to conclude that the skill is completed.
+    auto_sequencing_positive_count: int | None = None  # Not implemented.
 
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
 # waiting for a new action chunk, it will raise an exception and the server connection dies.
@@ -150,6 +160,20 @@ def save_visualization_snapshot(fig, save_path):
         print(f"Failed to save visualization snapshot: {e}")
 
 
+def get_instructions(user_message=None):
+    if user_message is None:
+        user_message = f"Enter instruction (or list of instructions separated by {INSTRUCTION_SEPARATOR}): "
+    user_input = input(user_message)
+
+    if INSTRUCTION_SEPARATOR in user_input:
+        instructions = user_input.split(INSTRUCTION_SEPARATOR)
+    else:
+        instructions = [user_input]
+    instruction = instructions[0]
+    future_instructions = instructions[1:]
+    return instruction, future_instructions
+
+
 def main(args: Args):
     if args.sequencing_model is not None:
         load_dotenv()
@@ -175,7 +199,7 @@ def main(args: Args):
     # Initialize the Panda environment. Using joint velocity action space and gripper position action space is very important.
     if args.reset_joints is None:
         env = RobotEnv(action_space="joint_velocity",
-                    gripper_action_space="position")
+                       gripper_action_space="position")
     else:
         if args.reset_joints == "downward":
             reset_joints = RESET_JOINTS_DOWNWARD
@@ -185,7 +209,7 @@ def main(args: Args):
             raise ValueError(
                 f"Invalid reset joints option: {args.reset_joints}. Choose from ['downward', 'outward']")
         env = RobotEnv(action_space="joint_velocity",
-                    gripper_action_space="position", reset_joints=reset_joints)
+                       gripper_action_space="position", reset_joints=reset_joints)
 
     print("Created the droid env!")
 
@@ -213,7 +237,7 @@ def main(args: Args):
         f.write("## Results\n\n")
 
     while True:
-        instruction = input("Enter instruction: ")
+        instruction, future_instructions = get_instructions()
 
         # Rollout parameters
         actions_from_chunk_completed = 0
@@ -224,11 +248,12 @@ def main(args: Args):
 
         joint_position_file = f"results/log/{date}/eval_{main_category}_{timestamp}_joints.csv"
         # Create a filename-safe version of the instruction
-        safe_instruction = instruction.replace(
-            " ", "_").replace("/", "_").replace("\\", "_")
+        # safe_instruction = instruction.replace(
+        #     " ", "_").replace("/", "_").replace("\\", "_")
         video = []
         # Added so we can keep track of instruction changing over time.
         instructions = []
+        skill_completion_notes = []
         wrist_video = []  # New list for wrist camera frames
 
         # Add data storage for plotting and JSON history
@@ -306,6 +331,7 @@ def main(args: Args):
         bar = tqdm.tqdm(range(args.max_timesteps))
         print("Running rollout... press Ctrl+C to stop early (or manually change prompt)")
         for t_step in bar:
+            skill_completion_note = ""
             if t_step > 0 and t_step % args.instruction_frequency == 0:
                 if args.sequencing_model is not None:
                     assert len(
@@ -313,15 +339,37 @@ def main(args: Args):
                     current_pil_image = Image.fromarray(video[-1])
                     print(
                         f"We are querying {args.sequencing_model} to see if {instruction} is completed")
-                    is_completed_message = prompt_construction.check_skill_completion(
-                        agent=vlm_agent,
-                        skill=instruction,
-                        current_image=current_pil_image,
-                        return_bool=False)
+                    # TODO: Make this if-elif more reasonable
+                    if args.sequencing_prompt == 'skill_completion':
+                        is_completed_message = prompt_construction.check_skill_completion(
+                            agent=vlm_agent,
+                            skill=instruction,
+                            current_image=current_pil_image,
+                            return_bool=False)
+                    elif args.sequencing_prompt == 'skill_sequencing_two_choices':
+                        if len(future_instructions) > 0:
+                            is_completed_message = prompt_construction.check_skill_sequencing_two_choices(
+                                agent=vlm_agent,
+                                skill=instruction,
+                                current_image=current_pil_image,
+                                next_skill=future_instructions[0],
+                                return_bool=False)
+                        else:
+                            print(
+                                "No future_instructions left! We will check if the skill is completed using skill_completion prompt")
+                            is_completed_message = prompt_construction.check_skill_completion(
+                                agent=vlm_agent,
+                                skill=instruction,
+                                current_image=current_pil_image,
+                                return_bool=False)
                     print(f"The VLM says: {is_completed_message}")
+                    skill_completion_note = f"{args.sequencing_model} with {args.sequencing_prompt}:\n  {instruction}: {is_completed_message}"
 
-                new_instruction = input(
-                    "Enter new instruction: (enter '' to keep current instruction). To provide empty string as intr, enter '<empty>' ")
+                user_message = "Enter new instruction: (enter '' to keep current instruction). To provide empty string as instr, enter '<empty>' "
+                # new_instruction = input(user_message)
+                new_instruction, new_future_instructions = get_instructions(
+                    user_message=user_message)
+                # TODO: Make this logic happen whenever we move on to the next instruction
                 if new_instruction == '':
                     instruction = instruction
                 elif new_instruction == '<empty>':
@@ -329,6 +377,15 @@ def main(args: Args):
                 elif new_instruction == 'zzz':
                     print("Ending episode!")
                     break
+                elif new_instruction == 'xxx':
+                    if len(future_instructions) > 0:
+                        instruction = future_instructions[0]
+                        future_instructions = future_instructions[1:]
+                    else:
+                        # TODO:In the future I should make this a loop.
+                        print(
+                            "No future instructions left! We will keep the same instruction")
+                        instruction = instruction
                 else:
                     instruction = new_instruction
                     print(f"Switching to instruction '{instruction}'")
@@ -342,7 +399,7 @@ def main(args: Args):
                 video.append(curr_obs[f"{args.external_camera}_image"])
                 wrist_video.append(curr_obs["wrist_image"])
                 instructions.append(instruction)
-
+                skill_completion_notes.append(skill_completion_note)
                 # Store joint positions for visualization
                 joint_positions.append(curr_obs["joint_position"])
 
@@ -529,8 +586,10 @@ def main(args: Args):
 
                 env.step(action)  # droid actually apply the action
             except KeyboardInterrupt:
-                instruction = input(
-                    "Enter 'zzz' to end episode. Otherwise, enter new instruction to continue: ")
+                user_message_keyboard_interrupt = "Enter 'zzz' to end episode. Otherwise, enter new instruction to continue: "
+                # instruction = input(user_message_keyboard_interrupt)
+                instruction, future_instructions = get_instructions(
+                    user_message=user_message_keyboard_interrupt)
                 if instruction == 'zzz':
                     print("Ending episode!")
                     break
@@ -706,8 +765,11 @@ def main(args: Args):
         if args.superimpose_instruction:
             assert len(combined_video) == len(
                 instructions), f"Got {len(combined_video)} frames but {len(instructions)} instructions."
+            assert len(combined_video) == len(
+                skill_completion_notes), f"Got {len(combined_video)} frames but {len(skill_completion_notes)} skill_completion_notes."
             for instr_i, instr in enumerate(instructions):
                 # Convert frame from RGB to BGR (OpenCV uses BGR)
+                skill_completion_note = skill_completion_notes[instr_i]
                 frame_bgr = cv2.cvtColor(
                     combined_video[instr_i], cv2.COLOR_RGB2BGR)
 
@@ -722,6 +784,20 @@ def main(args: Args):
                     thickness=2,
                     lineType=cv2.LINE_AA
                 )
+                # Split skill completion note into lines and add each line below the previous
+                skill_completion_lines = skill_completion_note.split('\n')
+                for line_i, line in enumerate(skill_completion_lines):
+                    cv2.putText(
+                        frame_bgr,
+                        line,
+                        # x, y position of text, increment y by 30 pixels for each line
+                        org=(10, 60 + line_i*30),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                        fontScale=1,
+                        color=(255, 255, 255),  # white text
+                        thickness=2,
+                        lineType=cv2.LINE_AA
+                    )
 
                 # Convert back to RGB
                 combined_video[instr_i] = cv2.cvtColor(

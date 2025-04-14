@@ -130,3 +130,15 @@ def check_skill_completion(agent, skill, current_image, return_bool=True):
         return as_bool(response.text)
     else:
         return response.text
+
+
+def check_skill_sequencing_two_choices(agent, skill, current_image, next_skill, return_bool=True):
+    prompt_txt_file = os.path.join(os.path.dirname(
+        __file__), "prompts", "skill_sequencing_two_choices.txt")
+    prompt_parts = construct_prompt(
+        prompt_txt_file, {"SKILL": skill, "CURRENT_IMAGE": current_image, "NEXT_SKILL": next_skill})
+    response = agent.generate_prediction(prompt_parts)
+    if return_bool:
+        return as_bool(response.text)
+    else:
+        return response.text
