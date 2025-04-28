@@ -3,7 +3,6 @@
 # This started as the main.py for droid on the 457 Franka laptop.
 # I am now going to update it to let me do real-time prompt revision.
 # ruff: noqa
-# pick up the blue block|put the blue block on the green block|pick up the red block|put the red block on the blue block
 
 import contextlib
 import dataclasses
@@ -121,7 +120,7 @@ class Args:
     # This can be a vlm, for example "gpt-4o" or "gemini-2.0-flash".
     sequencing_model: str | None = None
     # Relative path to prompt # Not quite implemented robustly. (TODO)
-    sequencing_prompt: str | None = 'skill_completion'
+    sequencing_prompt: str | None = None
     # How many times in a row to see the positive VLM signal to conclude that the skill is completed.
     auto_sequencing_positive_count: int | None = None  # Not implemented.
 
@@ -224,7 +223,6 @@ def main(args: Args):
     timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H%M")
     date = datetime.datetime.now().strftime("%m%d")
     # Get main category for this evaluation session
-    # TODO: make the results directory settable
     main_category = input("Enter main category for this evaluation session: ")
     os.makedirs(f"results/log/{date}", exist_ok=True)
     markdown_file = f"results/log/{date}/eval_{main_category}.md"
@@ -347,7 +345,7 @@ def main(args: Args):
                             agent=vlm_agent,
                             skill=instruction,
                             current_image=current_pil_image,
-                            return_bool=True)
+                            return_bool=False)
                     elif args.sequencing_prompt == 'skill_sequencing_two_choices':
                         if len(future_instructions) > 0:
                             is_completed_message = prompt_construction.check_skill_sequencing_two_choices(
@@ -355,7 +353,7 @@ def main(args: Args):
                                 skill=instruction,
                                 current_image=current_pil_image,
                                 next_skill=future_instructions[0],
-                                return_bool=True)
+                                return_bool=False)
                         else:
                             print(
                                 "No future_instructions left! We will check if the skill is completed using skill_completion prompt")
@@ -363,43 +361,34 @@ def main(args: Args):
                                 agent=vlm_agent,
                                 skill=instruction,
                                 current_image=current_pil_image,
-                                return_bool=True)
+                                return_bool=False)
                     print(f"The VLM says: {is_completed_message}")
                     skill_completion_note = f"{args.sequencing_model} with {args.sequencing_prompt}:\n  {instruction}: {is_completed_message}"
-                if args.auto_sequencing_positive_count == 1 and not is_completed_message:
-                    assert isinstance(is_completed_message, bool)
-                    print("automatically continuing since we got False")
-                elif args.auto_sequencing_positive_count == 1 and is_completed_message and len(future_instructions) > 0:
-                    assert isinstance(is_completed_message, bool)
-                    print("automatically continuing since we got True")
-                    instruction = future_instructions[0]
-                    future_instructions = future_instructions[1:]
-                else:
-                    user_message = "Enter new instruction: (enter '' to keep current instruction). To provide empty string as instr, enter '<empty>' "
-                    # new_instruction = input(user_message)
-                    new_instruction, new_future_instructions = get_instructions(
-                        user_message=user_message)
-                    # TODO: Make this logic happen whenever we move on to the next instruction
-                    if new_instruction == '':
-                        instruction = instruction
-                    elif new_instruction == '<empty>':
-                        instruction = ''
-                    elif new_instruction == 'zzz':
-                        print("Ending episode!")
-                        break
-                    elif new_instruction == 'xxx':
-                        if len(future_instructions) > 0:
-                            instruction = future_instructions[0]
-                            future_instructions = future_instructions[1:]
-                        else:
-                            # TODO:In the future I should make this a loop.
-                            print(
-                                "No future instructions left! We will keep the same instruction")
-                            instruction = instruction
+
+                user_message = "Enter new instruction: (enter '' to keep current instruction). To provide empty string as instr, enter '<empty>' "
+                # new_instruction = input(user_message)
+                new_instruction, new_future_instructions = get_instructions(
+                    user_message=user_message)
+                # TODO: Make this logic happen whenever we move on to the next instruction
+                if new_instruction == '':
+                    instruction = instruction
+                elif new_instruction == '<empty>':
+                    instruction = ''
+                elif new_instruction == 'zzz':
+                    print("Ending episode!")
+                    break
+                elif new_instruction == 'xxx':
+                    if len(future_instructions) > 0:
+                        instruction = future_instructions[0]
+                        future_instructions = future_instructions[1:]
                     else:
-                        instruction = new_instruction
-                        future_instructions = new_future_instructions
-                        print(f"Switching to instruction '{instruction}'")
+                        # TODO:In the future I should make this a loop.
+                        print(
+                            "No future instructions left! We will keep the same instruction")
+                        instruction = instruction
+                else:
+                    instruction = new_instruction
+                    print(f"Switching to instruction '{instruction}'")
             try:
                 curr_obs = _extract_observation(
                     args,

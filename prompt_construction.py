@@ -15,6 +15,8 @@ from contextlib import contextmanager
 from io import StringIO
 from PIL import Image
 from pathlib import Path
+import cv2
+import numpy as np
 
 
 SYSTEM_INSTRUCTION = "Please follow the instructions in the prompt."
@@ -142,3 +144,21 @@ def check_skill_sequencing_two_choices(agent, skill, current_image, next_skill, 
         return as_bool(response.text)
     else:
         return response.text
+
+
+def video_feedback(agent, video, overall_task, path, prompt="video_feedback_v2.txt"):
+    ''' This works if video is a str path to the video'''
+    # Check if video is a path (either as a Path object or a string)
+    if isinstance(video, (str, os.PathLike)):
+        # video is already a path, no conversion needed
+
+    else:
+        # Handle other cases if needed in the future
+        raise NotImplementedError
+
+    prompt_txt_file = os.path.join(os.path.dirname(
+        __file__), "prompts", "video_feedback", prompt)
+    prompt_parts = construct_prompt(
+        prompt_txt_file, {"VIDEO": video, "OVERALL_TASK": overall_task, "PATH": path})
+    response = agent.generate_prediction(prompt_parts)
+    return response.text
