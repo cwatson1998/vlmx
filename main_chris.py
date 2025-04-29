@@ -29,7 +29,8 @@ import matplotlib.pyplot as plt  # Added for visualization
 import matplotlib.animation as animation  # Added for dynamic updates
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
-
+# Important, this is not legacy generativeai like vlmx uses.
+from google import genai
 # Need to import the prompt_construction.py file
 try:
     import prompt_construction
@@ -124,6 +125,9 @@ class Args:
     sequencing_prompt: str | None = 'skill_completion'
     # How many times in a row to see the positive VLM signal to conclude that the skill is completed.
     auto_sequencing_positive_count: int | None = None  # Not implemented.
+    # For post rollout feedback
+    feedback_model: str | None = None
+    feedback_prompt: str | None = None
 
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
 # waiting for a new action chunk, it will raise an exception and the server connection dies.
@@ -189,6 +193,12 @@ def main(args: Args):
                 f"CHRIS Note: this might be because my API key handling is super hacky.")
         vlm_agent = prompt_construction.get_agent(
             args.sequencing_model, api_key)
+    if args.feedback_model is not None:
+        load_dotenv()
+        assert "gemni" in args.feedback_model, "Only supports gemini, because vlmx does not support videos"
+        google_api_key = os.environ.get("CHRIS_GOOGLE_API_KEY")
+        feedback_client = genai.Client(api_key=google_api_key)
+        print("We tried to construct a feedback client.")
 
     print("Entered main!")
     # Make sure external camera is specified by user -- we only use one external camera for the policy
@@ -703,6 +713,7 @@ def main(args: Args):
                     f"  Position {pos}: {count} frames ({count/len(early_stop_markers)*100:.1f}%)")
 
         deduplicated_instructions = deduplicated_list(instructions)
+        pretty_instructions_list = str(deduplicated_instructions)
         instructions_str = list_to_str(deduplicated_instructions)
         instructions_str = instructions_str.replace(
             " ", "_").replace("/", "_").replace("\\", "_")
@@ -821,10 +832,31 @@ def main(args: Args):
             save_dir, f"{args.external_camera}_{instructions_str}_{timestamp}.mp4")
         ImageSequenceClip(list(combined_video), fps=10).write_videofile(
             save_filename + ".mp4", codec="libx264")
+        external_video_filename = save_filename + "_external.mp4"
+        external_video_filename = os.path.abspath(external_video_filename)
         ImageSequenceClip(list(video), fps=10).write_videofile(
-            save_filename + "_external.mp4", codec="libx264")
+            external_video_filename, codec="libx264")
+        print(
+            f"External video saved to absolute path: {external_video_filename}")
         ImageSequenceClip(list(wrist_video), fps=10).write_videofile(
             save_filename + "_wrist.mp4", codec="libx264")
+
+        # Convert external_video_filename to absolute path
+
+        if args.feedback_model:
+            # Prompt the user to input the overall task for video feedback
+            overall_task = input("Enter the overall task for video feedback: ")
+
+            print(
+                f"Trying to query {args.feedback_model} with prompt {args.feedback_prompt} to see about the overall task {overall_task} with path {pretty_instructions_list}")
+            if args.feedback_prompt is not None:
+                feedback = prompt_construction.video_feedback_gemini(feedback_client, args.feedback_model, str(
+                    external_video_filename), overall_task, pretty_instructions_list, prompt=args.feedback_prompt)
+            else:
+                feedback = prompt_construction.video_feedback_gemini(feedback_client, args.feedback_model, str(
+                    external_video_filename), overall_task, pretty_instructions_list)
+            print("the feedback is:")
+            print(feedback)
 
         # Get success value
         success: str | float | None = None

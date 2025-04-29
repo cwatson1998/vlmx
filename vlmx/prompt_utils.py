@@ -5,6 +5,7 @@ import ast
 import re
 import os
 import google.generativeai as genai
+
 from vlmx.utils import string_to_file
 import textwrap
 import markdown2
@@ -13,22 +14,6 @@ import base64
 from PIL import Image
 import anthropic
 from openai import OpenAI
-
-
-def setup_gemini(model_name, system_instruction=None, api_key=None):
-    logging.info(
-        f"Setting up Google's model {model_name} with API key {api_key}")
-    api_key = api_key or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        return None
-
-    genai.configure(api_key=api_key)
-
-    # genai.list_models()
-    return genai.GenerativeModel(
-        model_name,
-        system_instruction=system_instruction,
-    )
 
 
 def setup_vlm_model(model_name, system_instruction=None, api_key=None):
@@ -44,18 +29,37 @@ def setup_vlm_model(model_name, system_instruction=None, api_key=None):
             "Model name must contain 'gpt' `claude` or `o` or 'gemini'. Got: {}".format(model_name))
 
 
-def setup_gemini(model_name, system_instruction=None, api_key=None):
+class GeminiWrapper(genai.GenerativeModel):
+    # This was added by chris.
+    def __init__(self, model_name, system_instruction, api_key):
+        self.model_name = model_name
+        self.system_instruction = system_instruction
+        self.api_key = api_key
+        self.client = genai.Client(api_key=self.api_key)
+        raise NotImplementedError(
+            "This got too hard, because a generativemodel has two clients (._client and ._async_client)")
+
+
+def setup_gemini(model_name, system_instruction=None, api_key=None, legacy_vlmx=True):
+    logging.info(
+        f"Setting up Google's model {model_name} with API key {api_key}")
     api_key = api_key or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         return None
 
-    genai.configure(api_key=api_key)
+    if legacy_vlmx:
+        genai.configure(api_key=api_key)
 
-    # genai.list_models()
-    return genai.GenerativeModel(
-        model_name,
-        system_instruction=system_instruction,
-    )
+        # genai.list_models()
+        return genai.GenerativeModel(
+            model_name,
+            system_instruction=system_instruction,
+        )
+    else:
+        raise NotImplementedError
+        return GeminiWrapper(model_name, system_instruction, api_key)
+
+        # These wrappers provide generate_content from genai.GenerativeModel, but not all the other methods.
 
 
 class ClaudeWrapper:
