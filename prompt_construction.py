@@ -15,6 +15,11 @@ from contextlib import contextmanager
 from io import StringIO
 from PIL import Image
 from pathlib import Path
+import cv2
+import numpy as np
+from google.generativeai import types
+from time import sleep
+from google import genai
 
 
 SYSTEM_INSTRUCTION = "Please follow the instructions in the prompt."
@@ -61,12 +66,33 @@ def construct_prompt(prompt_txt_path, content_dict, special_separator="<|>"):
 
 
 class HelperAgent(Agent):
+    # This is what gets created.
+    # Notably, in Long's VLMX there is no Gemini wrapper.
     OUT_RESULT_PATH = "test.txt"
 
     def _make_system_instruction(self):
         return SYSTEM_INSTRUCTION
 
-    def _make_prompt_parts(self, question: str):
+    def _make_prompt_parts(self, question):
+        # Incredibly cursed, question is already concatenated.
+
+        # The commented out code here does not above.
+        # # Here I am going to add in some hackiness.
+        # # This only works for Gemini.
+        # # It lets you pass in an mp4 file up to 20MB.
+        # includes_mp4 = False
+        # for p in question:
+        #     print(f"we are checking: {p}")
+
+        #     if str(p).endswith('.mp4'):
+        #         print("we think it does in in mp4")
+        #         includes_mp4 = True
+
+        # if includes_mp4:
+        #     print("Includes mp4 is true")
+        #     question = hacky_prompt_processing(question)
+        # print("_make_prompt_parts is returning")
+        # print(question)
         return question
 
     def parse_response(self, response):
@@ -114,6 +140,7 @@ def as_bool(my_str):
 
 
 def get_agent(model_name, api_key, out_dir="chris_temp_deletable"):
+    # This is the function that main_chris uses to make the agent.
     # It is important to provide the api key
     # I will save my api keys as CHRIS_OPENAI_API_KEY in my .env file.
     cfg = AgentConfig(model_name=model_name, out_dir=out_dir, api_key=api_key)
@@ -142,3 +169,71 @@ def check_skill_sequencing_two_choices(agent, skill, current_image, next_skill, 
         return as_bool(response.text)
     else:
         return response.text
+
+
+def hacky_prompt_part_processing(prompt_part):
+    assert isinstance(
+        prompt_part, str), "Hacky video processing only works when everything is a string. (use a path to your mp4)"
+    if prompt_part.endswith(".mp4"):
+        video_bytes = open(prompt_part, 'rb').read()
+        return types.Part(inline_data=types.Blob(data=video_bytes, mime_type='video/mp4'))
+    else:
+        return types.Part(text=prompt_part)
+
+
+def hacky_prompt_processing(prompt_parts):
+    ''' This gives you the contents field you can put into a generate_content gemini request.'''
+    parts = [hacky_prompt_part_processing(p) for p in prompt_parts]
+    return types.Content(parts)
+
+
+def video_feedback_gemini(gemini_client, gemini_model, video, overall_task, path, prompt="video_feedback_v2.txt", max_retries=10, retry_sleep=0.5):
+    ''' This works if video is a str path to the video. 
+        Will only work with gemini models. 
+        # VLMX is broken for videos, so this uses a client and model name.
+        '''
+    # Check if video is a path (either as a Path object or a string)
+    if not isinstance(video, (str, Path)):
+        raise ValueError(
+            "Video must be a string path or Path object pointing to an MP4 file")
+
+    # Convert to string if it's a Path object
+    video_path = str(video)
+
+    # Check if it's an absolute path
+    if not os.path.isabs(video_path):
+        raise ValueError(
+            f"Video path must be an absolute path, got: {video_path}")
+
+    # Check if it has .mp4 extension
+    if not video_path.lower().endswith('.mp4'):
+        raise ValueError(f"Video file must be an MP4 file, got: {video_path}")
+
+    # Check if the file exists
+    if not os.path.exists(video_path):
+        raise ValueError(f"Video file does not exist: {video_path}")
+
+    # Now it is time to upload the file:
+    video = gemini_client.files.upload(file=str(video))
+    # I wish this would block, but maybe I need to sleep.
+
+    prompt_txt_file = os.path.join(os.path.dirname(
+        __file__), "prompts", "video_feedback", prompt)
+    prompt_parts = construct_prompt(
+        prompt_txt_file, {"VIDEO": video, "OVERALL_TASK": overall_task, "PATH": path})
+
+    for i in range(max_retries):
+        sleep((2**i) * retry_sleep)
+        try:
+            response = gemini_client.models.generate_content(
+                model=gemini_model, contents=prompt_parts
+            )
+            break
+        except genai.errors.ClientError:
+            continue
+
+    return response.text
+
+    # I modified HelperAgent to be able to cope with this when everything is a String.
+    response = agent.generate_prediction(prompt_parts)
+    return response.text

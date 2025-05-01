@@ -3,6 +3,7 @@
 # This started as the main.py for droid on the 457 Franka laptop.
 # I am now going to update it to let me do real-time prompt revision.
 # ruff: noqa
+# pick up the blue block|put the blue block on the green block|pick up the red block|put the red block on the blue block
 
 import contextlib
 import dataclasses
@@ -28,7 +29,8 @@ import matplotlib.pyplot as plt  # Added for visualization
 import matplotlib.animation as animation  # Added for dynamic updates
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
-
+# Important, this is not legacy generativeai like vlmx uses.
+from google import genai
 # Need to import the prompt_construction.py file
 try:
     import prompt_construction
@@ -123,6 +125,9 @@ class Args:
     sequencing_prompt: str | None = 'skill_completion'
     # How many times in a row to see the positive VLM signal to conclude that the skill is completed.
     auto_sequencing_positive_count: int | None = None  # Not implemented.
+    # For post rollout feedback
+    feedback_model: str | None = None
+    feedback_prompt: str | None = None
 
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
 # waiting for a new action chunk, it will raise an exception and the server connection dies.
@@ -188,6 +193,12 @@ def main(args: Args):
                 f"CHRIS Note: this might be because my API key handling is super hacky.")
         vlm_agent = prompt_construction.get_agent(
             args.sequencing_model, api_key)
+    if args.feedback_model is not None:
+        load_dotenv()
+        assert "gemni" in args.feedback_model, "Only supports gemini, because vlmx does not support videos"
+        google_api_key = os.environ.get("CHRIS_GOOGLE_API_KEY")
+        feedback_client = genai.Client(api_key=google_api_key)
+        print("We tried to construct a feedback client.")
 
     print("Entered main!")
     # Make sure external camera is specified by user -- we only use one external camera for the policy
@@ -223,6 +234,7 @@ def main(args: Args):
     timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H%M")
     date = datetime.datetime.now().strftime("%m%d")
     # Get main category for this evaluation session
+    # TODO: make the results directory settable
     main_category = input("Enter main category for this evaluation session: ")
     os.makedirs(f"results/log/{date}", exist_ok=True)
     markdown_file = f"results/log/{date}/eval_{main_category}.md"
@@ -345,7 +357,7 @@ def main(args: Args):
                             agent=vlm_agent,
                             skill=instruction,
                             current_image=current_pil_image,
-                            return_bool=False)
+                            return_bool=True)
                     elif args.sequencing_prompt == 'skill_sequencing_two_choices':
                         if len(future_instructions) > 0:
                             is_completed_message = prompt_construction.check_skill_sequencing_two_choices(
@@ -353,7 +365,7 @@ def main(args: Args):
                                 skill=instruction,
                                 current_image=current_pil_image,
                                 next_skill=future_instructions[0],
-                                return_bool=False)
+                                return_bool=True)
                         else:
                             print(
                                 "No future_instructions left! We will check if the skill is completed using skill_completion prompt")
@@ -361,34 +373,43 @@ def main(args: Args):
                                 agent=vlm_agent,
                                 skill=instruction,
                                 current_image=current_pil_image,
-                                return_bool=False)
+                                return_bool=True)
                     print(f"The VLM says: {is_completed_message}")
                     skill_completion_note = f"{args.sequencing_model} with {args.sequencing_prompt}:\n  {instruction}: {is_completed_message}"
-
-                user_message = "Enter new instruction: (enter '' to keep current instruction). To provide empty string as instr, enter '<empty>' "
-                # new_instruction = input(user_message)
-                new_instruction, new_future_instructions = get_instructions(
-                    user_message=user_message)
-                # TODO: Make this logic happen whenever we move on to the next instruction
-                if new_instruction == '':
-                    instruction = instruction
-                elif new_instruction == '<empty>':
-                    instruction = ''
-                elif new_instruction == 'zzz':
-                    print("Ending episode!")
-                    break
-                elif new_instruction == 'xxx':
-                    if len(future_instructions) > 0:
-                        instruction = future_instructions[0]
-                        future_instructions = future_instructions[1:]
-                    else:
-                        # TODO:In the future I should make this a loop.
-                        print(
-                            "No future instructions left! We will keep the same instruction")
-                        instruction = instruction
+                if args.auto_sequencing_positive_count == 1 and not is_completed_message:
+                    assert isinstance(is_completed_message, bool)
+                    print("automatically continuing since we got False")
+                elif args.auto_sequencing_positive_count == 1 and is_completed_message and len(future_instructions) > 0:
+                    assert isinstance(is_completed_message, bool)
+                    print("automatically continuing since we got True")
+                    instruction = future_instructions[0]
+                    future_instructions = future_instructions[1:]
                 else:
-                    instruction = new_instruction
-                    print(f"Switching to instruction '{instruction}'")
+                    user_message = "Enter new instruction: (enter '' to keep current instruction). To provide empty string as instr, enter '<empty>' "
+                    # new_instruction = input(user_message)
+                    new_instruction, new_future_instructions = get_instructions(
+                        user_message=user_message)
+                    # TODO: Make this logic happen whenever we move on to the next instruction
+                    if new_instruction == '':
+                        instruction = instruction
+                    elif new_instruction == '<empty>':
+                        instruction = ''
+                    elif new_instruction == 'zzz':
+                        print("Ending episode!")
+                        break
+                    elif new_instruction == 'xxx':
+                        if len(future_instructions) > 0:
+                            instruction = future_instructions[0]
+                            future_instructions = future_instructions[1:]
+                        else:
+                            # TODO:In the future I should make this a loop.
+                            print(
+                                "No future instructions left! We will keep the same instruction")
+                            instruction = instruction
+                    else:
+                        instruction = new_instruction
+                        future_instructions = new_future_instructions
+                        print(f"Switching to instruction '{instruction}'")
             try:
                 curr_obs = _extract_observation(
                     args,
@@ -692,6 +713,7 @@ def main(args: Args):
                     f"  Position {pos}: {count} frames ({count/len(early_stop_markers)*100:.1f}%)")
 
         deduplicated_instructions = deduplicated_list(instructions)
+        pretty_instructions_list = str(deduplicated_instructions)
         instructions_str = list_to_str(deduplicated_instructions)
         instructions_str = instructions_str.replace(
             " ", "_").replace("/", "_").replace("\\", "_")
@@ -810,10 +832,31 @@ def main(args: Args):
             save_dir, f"{args.external_camera}_{instructions_str}_{timestamp}.mp4")
         ImageSequenceClip(list(combined_video), fps=10).write_videofile(
             save_filename + ".mp4", codec="libx264")
+        external_video_filename = save_filename + "_external.mp4"
+        external_video_filename = os.path.abspath(external_video_filename)
         ImageSequenceClip(list(video), fps=10).write_videofile(
-            save_filename + "_external.mp4", codec="libx264")
+            external_video_filename, codec="libx264")
+        print(
+            f"External video saved to absolute path: {external_video_filename}")
         ImageSequenceClip(list(wrist_video), fps=10).write_videofile(
             save_filename + "_wrist.mp4", codec="libx264")
+
+        # Convert external_video_filename to absolute path
+
+        if args.feedback_model:
+            # Prompt the user to input the overall task for video feedback
+            overall_task = input("Enter the overall task for video feedback: ")
+
+            print(
+                f"Trying to query {args.feedback_model} with prompt {args.feedback_prompt} to see about the overall task {overall_task} with path {pretty_instructions_list}")
+            if args.feedback_prompt is not None:
+                feedback = prompt_construction.video_feedback_gemini(feedback_client, args.feedback_model, str(
+                    external_video_filename), overall_task, pretty_instructions_list, prompt=args.feedback_prompt)
+            else:
+                feedback = prompt_construction.video_feedback_gemini(feedback_client, args.feedback_model, str(
+                    external_video_filename), overall_task, pretty_instructions_list)
+            print("the feedback is:")
+            print(feedback)
 
         # Get success value
         success: str | float | None = None
