@@ -86,9 +86,9 @@ class NumpyJSONEncoder(json.JSONEncoder):
 @dataclasses.dataclass
 class Args:
     # Hardware parameters
-    left_camera_id: str = "25455306"  # e.g., "24259877"
-    right_camera_id: str = "27085680"  # fix: "27085680"  move: # "26368109"
-    wrist_camera_id: str = "14436910"  # e.g., "13062452"
+    left_camera_id: str = "26368109"#"25455306"  # e.g., "24259877"
+    right_camera_id: str = "25455306" #"27085680"  # fix: "27085680"  move: # "26368109"
+    wrist_camera_id: str = "15512737" #"14436910"  # e.g., "13062452"
     reset_joints: str | None = None
 
     # Policy parameters
@@ -98,7 +98,7 @@ class Args:
     )
 
     # Rollout parameters
-    max_timesteps: int = 800
+    max_timesteps: int = 1500
     # How many actions to execute from a predicted action chunk before querying policy server again
     # 8 is usually a good default (equals 0.5 seconds of action execution).
     open_loop_horizon: int = 8
@@ -116,7 +116,7 @@ class Args:
     # Video
     superimpose_instruction: bool = True
     # How often to ask user for new instruction (and to check if skill is completed, if using VLM 'sequencing_model)
-    instruction_frequency: int = 50
+    instruction_frequency: int = 75
 
     # Sequencing model
     # This can be a vlm, for example "gpt-4o" or "gemini-2.0-flash".
@@ -195,7 +195,7 @@ def main(args: Args):
             args.sequencing_model, api_key)
     if args.feedback_model is not None:
         load_dotenv()
-        assert "gemni" in args.feedback_model, "Only supports gemini, because vlmx does not support videos"
+        assert "gemini" in args.feedback_model, "Only supports gemini, because vlmx does not support videos"
         google_api_key = os.environ.get("CHRIS_GOOGLE_API_KEY")
         feedback_client = genai.Client(api_key=google_api_key)
         print("We tried to construct a feedback client.")
