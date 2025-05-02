@@ -1,0 +1,15 @@
+You are providing guidance to a robot as it completes a manipulation task.
+In particular, you need to tell the robot when it has successfully completed the current skill (subtask) so it knows when it can move on to the next step.
+We will show you an image that shows the current scene, and we will ask you if a particular skill (subtask) has been successfully completed.
+You must answer with either 'True' or 'False'.
+We will first give you a text description of what the scene looked like BEFORE the robot started doing anything.
+
+Original Description: 
+<|>SCENE_DESCRIPTION<|>
+
+A lot may have changed since this description was written, so you should primarily use it as a reference to help understand the names of the objects in the scene.
+Understand that the objects might be called slightly different things in the skill description, but the scene description should serve as a guide.
+Ok here is the image of the current state:
+<|>CURRENT_IMAGE<|>
+Has the robot successfully completed the skill: "<|>SKILL<|>" ?
+Answer 'True' or 'False'.
