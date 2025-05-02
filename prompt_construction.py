@@ -147,16 +147,20 @@ def get_agent(model_name, api_key, out_dir="chris_temp_deletable"):
     return HelperAgent(cfg)
 
 
-def check_skill_completion(agent, skill, current_image, return_bool=True):
+def check_skill_completion(agent, skill, current_image, return_bool=True, scene_description=None, prompt="skill_completion.txt"):
     prompt_txt_file = os.path.join(os.path.dirname(
-        __file__), "prompts", "skill_completion.txt")
+        __file__), "prompts", prompt)
+    prompt_dict = {"SKILL": skill, "CURRENT_IMAGE": current_image}
+    if scene_description is not None:
+        prompt_dict["SCENE_DESCRIPTION"] = scene_description
     prompt_parts = construct_prompt(
-        prompt_txt_file, {"SKILL": skill, "CURRENT_IMAGE": current_image})
+        prompt_txt_file, prompt_dict)
     response = agent.generate_prediction(prompt_parts)
     if return_bool:
         return as_bool(response.text)
     else:
         return response.text
+
 
 
 def check_skill_sequencing_two_choices(agent, skill, current_image, next_skill, return_bool=True):

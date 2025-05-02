@@ -11,6 +11,7 @@ import contextlib
 import dataclasses
 import datetime
 import faulthandler
+import sys
 import os
 import signal
 import json  # Added for JSON export
@@ -124,7 +125,7 @@ class Args:
     # This can be a vlm, for example "gpt-4o" or "gemini-2.0-flash".
     sequencing_model: str | None = None
     # Relative path to prompt # Not quite implemented robustly. (TODO)
-    sequencing_prompt: str | None = 'skill_completion'
+    sequencing_prompt: str | None = 'skill_completion.txt'
     # How many times in a row to see the positive VLM signal to conclude that the skill is completed.
     auto_sequencing_positive_count: int | None = None  # Not implemented.
     # For post rollout feedback
@@ -254,18 +255,20 @@ def main(args: Args):
             f"Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
         f.write("## Results\n\n")
 
-    if args.scene_description_prompt is not None:
+    if False and args.scene_description_prompt is not None:
         assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
 
         temp_overall_task = input(
             "Enter the overall task to help scene description:")
+        print("taking a dummy step")
+        env.step(np.zeros(8))  # Dummy step to get the first observation
         print("Taking a picture:")
         temp_obs = _extract_observation(
             args,
             env.get_observation(),
             save_to_disk=False,
         )
-        temp_image = curr_obs[f"{args.external_camera}_image"]
+        temp_image = Image.fromarray(temp_obs[f"{args.external_camera}_image"])
         print(f"Debug: the type of the picture we took is {temp_image}")
         # Time to take a picture.
         scene_description = prompt_construction.scene_description(
@@ -273,7 +276,9 @@ def main(args: Args):
         print(
             f"Using prompt {args.scene_description_prompt}, the scene description is:")
         print(scene_description)
-
+    # hella hacky
+    sequencing_scene_description = ""
+    asked_for_description = False
     while True:
         instruction, future_instructions = get_instructions()
 
@@ -368,7 +373,73 @@ def main(args: Args):
 
         bar = tqdm.tqdm(range(args.max_timesteps))
         print("Running rollout... press Ctrl+C to stop early (or manually change prompt)")
+        
+
+
+        if True and args.scene_description_prompt is not None:
+            print("debug: trying to get the scene image")
+        
+            assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
+
+            temp_overall_task = input(
+                "Enter the overall task to help scene description:")
+            print("taking a dummy step")
+            env.step(np.zeros(8))  # Dummy step to get the first observation
+            env.step(np.zeros(8))  # Dummy step to get the first observation
+            env.step(np.zeros(8))  # Dummy step to get the first observation
+            
+            print("Taking a picture:")
+            temp_obs = _extract_observation(
+                args,
+                env.get_observation(),
+                save_to_disk=False,
+            )
+            temp_image = Image.fromarray(temp_obs[f"{args.external_camera}_image"])
+            print(f"Debug: the type of the picture we took is {temp_image}")
+            # Time to take a picture.
+            scene_description = prompt_construction.scene_description(
+                vlm_agent, temp_overall_task, temp_image)
+            print(
+                f"Using prompt {args.scene_description_prompt}, the scene description is:")
+            print(scene_description)
+
+        
+        print("Just fyi, the value of sequencing_scene_description is:")
+        print(sequencing_scene_description)
+        regenerate = input("If you would like us to re-generate it, please say regenerate. Or you can say override. Otherwise we will keep it")
+        if regenerate == "regenerate":
+            asked_for_description = False
+        elif regenerate == "override":
+            asked_for_description = True
+            print("please enter your scene desciption and press ctl D when done.")
+
+            sequencing_scene_description = sys.stdin.read()
+            print("you entered")
+            print(sequencing_scene_description)
         for t_step in bar:
+            if len(video)>0 and args.scene_description_prompt is not None and not asked_for_description:
+                asked_for_description = True
+                myy = input("enter y to print a scene description. This won't effect anything else")
+                if myy == 'y':
+                    assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
+                    
+                    temp_overall_task = input(
+                        "Enter the overall task to help scene description, or zzz if you want to skip this step:")
+                    if temp_overall_task == 'zzz':
+                        print("Skipping scene description")
+                        pass
+                    else:
+                        temp_image = Image.fromarray(video[-1])
+                        # Time to take a picture.
+                        scene_description = prompt_construction.scene_description(
+                            vlm_agent, temp_overall_task, temp_image)
+                        print(
+                            f"Using prompt {args.scene_description_prompt}, the scene description is:")
+                        print(scene_description)
+                        print("You probably want to restart the episode so you can give an appropriate first task")
+                        #sequencing_scene_description = scene_description
+
+
             skill_completion_note = ""
             if t_step > 0 and t_step % args.instruction_frequency == 0:
                 if args.sequencing_model is not None:
@@ -378,11 +449,21 @@ def main(args: Args):
                     print(
                         f"We are querying {args.sequencing_model} to see if {instruction} is completed")
                     # TODO: Make this if-elif more reasonable
-                    if args.sequencing_prompt == 'skill_completion':
+                    if args.sequencing_prompt == 'skill_completion.txt':
                         is_completed_message = prompt_construction.check_skill_completion(
                             agent=vlm_agent,
                             skill=instruction,
                             current_image=current_pil_image,
+                            prompt=args.sequencing_prompt,
+                            return_bool=True)
+                    elif args.sequencing_prompt == 'skill_completion_v2.txt':
+                        print("debug: using skill_sequencing_v2.txt")
+                        is_completed_message = prompt_construction.check_skill_completion(
+                            agent=vlm_agent,
+                            skill=instruction,
+                            current_image=current_pil_image,
+                            prompt=args.sequencing_prompt,
+                            scene_description=sequencing_scene_description,
                             return_bool=True)
                     elif args.sequencing_prompt == 'skill_sequencing_two_choices':
                         if len(future_instructions) > 0:
@@ -871,18 +952,20 @@ def main(args: Args):
 
         if args.feedback_model:
             # Prompt the user to input the overall task for video feedback
-            overall_task = input("Enter the overall task for video feedback: ")
+            overall_task = input("Enter the overall task for video feedback (or zzz to skip): ")
+            if overall_task != 'zzz':
+                
 
-            print(
-                f"Trying to query {args.feedback_model} with prompt {args.feedback_prompt} to see about the overall task {overall_task} with path {pretty_instructions_list}")
-            if args.feedback_prompt is not None:
-                feedback = prompt_construction.video_feedback_gemini(feedback_client, args.feedback_model, str(
-                    external_video_filename), overall_task, pretty_instructions_list, prompt=args.feedback_prompt)
-            else:
-                feedback = prompt_construction.video_feedback_gemini(feedback_client, args.feedback_model, str(
-                    external_video_filename), overall_task, pretty_instructions_list)
-            print("the feedback is:")
-            print(feedback)
+                print(
+                    f"Trying to query {args.feedback_model} with prompt {args.feedback_prompt} to see about the overall task {overall_task} with path {pretty_instructions_list}")
+                if args.feedback_prompt is not None:
+                    feedback = prompt_construction.video_feedback_gemini(feedback_client, args.feedback_model, str(
+                        external_video_filename), overall_task, pretty_instructions_list, prompt=args.feedback_prompt)
+                else:
+                    feedback = prompt_construction.video_feedback_gemini(feedback_client, args.feedback_model, str(
+                        external_video_filename), overall_task, pretty_instructions_list)
+                print("the feedback is:")
+                print(feedback)
 
         # Get success value
         success: str | float | None = None
