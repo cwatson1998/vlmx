@@ -5,6 +5,8 @@
 # ruff: noqa
 # pick up the blue block|put the blue block on the green block|pick up the red block|put the red block on the blue block
 
+# Note: for all the models, you should use the 2.5 flash preview. An example good command is:
+
 import contextlib
 import dataclasses
 import datetime
@@ -128,6 +130,10 @@ class Args:
     # For post rollout feedback
     feedback_model: str | None = None
     feedback_prompt: str | None = None
+    # For scene description
+    # Will use the same as the sequencing model
+    scene_description_prompt: str | None = None
+
 
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
 # waiting for a new action chunk, it will raise an exception and the server connection dies.
@@ -247,6 +253,26 @@ def main(args: Args):
         f.write(
             f"Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
         f.write("## Results\n\n")
+
+    if args.scene_description_prompt is not None:
+        assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
+
+        temp_overall_task = input(
+            "Enter the overall task to help scene description:")
+        print("Taking a picture:")
+        temp_obs = _extract_observation(
+            args,
+            env.get_observation(),
+            save_to_disk=False,
+        )
+        temp_image = curr_obs[f"{args.external_camera}_image"]
+        print(f"Debug: the type of the picture we took is {temp_image}")
+        # Time to take a picture.
+        scene_description = prompt_construction.scene_description(
+            vlm_agent, temp_overall_task, temp_image)
+        print(
+            f"Using prompt {args.scene_description_prompt}, the scene description is:")
+        print(scene_description)
 
     while True:
         instruction, future_instructions = get_instructions()

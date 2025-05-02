@@ -237,3 +237,12 @@ def video_feedback_gemini(gemini_client, gemini_model, video, overall_task, path
     # I modified HelperAgent to be able to cope with this when everything is a String.
     response = agent.generate_prediction(prompt_parts)
     return response.text
+
+
+def scene_description(agent, overall_task, image):
+    prompt_txt_file = os.path.join(os.path.dirname(
+        __file__), "prompts", "scene_description", "scene_description_v1.txt")
+    prompt_parts = construct_prompt(
+        prompt_txt_file, {"OVERALL_TASK": overall_task, "IMAGE": image})
+    response = agent.generate_prediction(prompt_parts)
+    return response.text
