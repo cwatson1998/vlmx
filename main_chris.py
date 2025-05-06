@@ -88,9 +88,10 @@ class NumpyJSONEncoder(json.JSONEncoder):
 @dataclasses.dataclass
 class Args:
     # Hardware parameters
-    left_camera_id: str = "26368109"#"25455306"  # e.g., "24259877"
-    right_camera_id: str = "25455306" #"27085680"  # fix: "27085680"  move: # "26368109"
-    wrist_camera_id: str = "15512737" #"14436910"  # e.g., "13062452"
+    left_camera_id: str = "26368109"  # "25455306"  # e.g., "24259877"
+    # "27085680"  # fix: "27085680"  move: # "26368109"
+    right_camera_id: str = "25455306"
+    wrist_camera_id: str = "15512737"  # "14436910"  # e.g., "13062452"
     reset_joints: str | None = None
 
     # Policy parameters
