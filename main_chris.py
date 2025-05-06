@@ -89,10 +89,9 @@ class NumpyJSONEncoder(json.JSONEncoder):
 @dataclasses.dataclass
 class Args:
     # Hardware parameters
-    left_camera_id: str = "26368109"  # "25455306"  # e.g., "24259877"
-    # "27085680"  # fix: "27085680"  move: # "26368109"
-    right_camera_id: str = "25455306"
-    wrist_camera_id: str = "15512737"  # "14436910"  # e.g., "13062452"
+    left_camera_id: str = "26368109"#"25455306"  # e.g., "24259877"
+    right_camera_id: str = "25455306" #"27085680"  # fix: "27085680"  move: # "26368109"
+    wrist_camera_id: str = "15512737" #"14436910"  # e.g., "13062452"
     reset_joints: str | None = None
 
     # Policy parameters
@@ -278,9 +277,46 @@ def main(args: Args):
             f"Using prompt {args.scene_description_prompt}, the scene description is:")
         print(scene_description)
     # hella hacky
+    scene_description = ""
     sequencing_scene_description = ""
     asked_for_description = False
     while True:
+
+        if True and args.scene_description_prompt is not None:
+            
+            assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
+
+            temp_overall_task = input(
+                "Enter the overall task to help scene description (enter 'xxx' to skip scene generation):")
+            print("taking a dummy step")
+            if temp_overall_task == 'xxx':
+                env.step(np.zeros(8)) # for consistency
+            else:
+                env.step(np.zeros(8))  # Dummy step to get the first observation
+                # env.step(np.zeros(8))  # Dummy step to get the first observation
+                # env.step(np.zeros(8))  # Dummy step to get the first observation
+                
+                print("Taking a picture:")
+                temp_obs = _extract_observation(
+                    args,
+                    env.get_observation(),
+                    save_to_disk=False,
+                )
+                temp_image = Image.fromarray(temp_obs[f"{args.external_camera}_image"])
+                print(f"Debug: the type of the picture we took is {temp_image}")
+                # Time to take a picture.
+                scene_description = prompt_construction.scene_description(
+                    vlm_agent, temp_overall_task, temp_image)
+                print(
+                    f"Using prompt {args.scene_description_prompt}, the scene description is:")
+                print(scene_description)
+
+        sequencing_scene_description = scene_description
+        print("Just fyi, the current value of sequencing_scene_description is:")
+        print(sequencing_scene_description)
+
+
+
         instruction, future_instructions = get_instructions()
 
         # Rollout parameters
@@ -377,73 +413,21 @@ def main(args: Args):
         
 
 
-        if True and args.scene_description_prompt is not None:
-            print("debug: trying to get the scene image")
-        
-            assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
+        # regenerate = input("If you would like us to re-generate it, please say regenerate. Or you can say override. Otherwise we will keep it")
+        # if regenerate == "regenerate":
+        #     asked_for_description = False
+        # elif regenerate == "override":
+        #     asked_for_description = True
+        #     print("please enter your scene desciption and press ctl D when done.")
 
-            temp_overall_task = input(
-                "Enter the overall task to help scene description:")
-            print("taking a dummy step")
-            env.step(np.zeros(8))  # Dummy step to get the first observation
-            env.step(np.zeros(8))  # Dummy step to get the first observation
-            env.step(np.zeros(8))  # Dummy step to get the first observation
-            
-            print("Taking a picture:")
-            temp_obs = _extract_observation(
-                args,
-                env.get_observation(),
-                save_to_disk=False,
-            )
-            temp_image = Image.fromarray(temp_obs[f"{args.external_camera}_image"])
-            print(f"Debug: the type of the picture we took is {temp_image}")
-            # Time to take a picture.
-            scene_description = prompt_construction.scene_description(
-                vlm_agent, temp_overall_task, temp_image)
-            print(
-                f"Using prompt {args.scene_description_prompt}, the scene description is:")
-            print(scene_description)
-
-        
-        print("Just fyi, the value of sequencing_scene_description is:")
-        print(sequencing_scene_description)
-        regenerate = input("If you would like us to re-generate it, please say regenerate. Or you can say override. Otherwise we will keep it")
-        if regenerate == "regenerate":
-            asked_for_description = False
-        elif regenerate == "override":
-            asked_for_description = True
-            print("please enter your scene desciption and press ctl D when done.")
-
-            sequencing_scene_description = sys.stdin.read()
-            print("you entered")
-            print(sequencing_scene_description)
+        #     sequencing_scene_description = sys.stdin.read()
+        #     print("you entered")
+        #     print(sequencing_scene_description)
         for t_step in bar:
-            if len(video)>0 and args.scene_description_prompt is not None and not asked_for_description:
-                asked_for_description = True
-                myy = input("enter y to print a scene description. This won't effect anything else")
-                if myy == 'y':
-                    assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
-                    
-                    temp_overall_task = input(
-                        "Enter the overall task to help scene description, or zzz if you want to skip this step:")
-                    if temp_overall_task == 'zzz':
-                        print("Skipping scene description")
-                        pass
-                    else:
-                        temp_image = Image.fromarray(video[-1])
-                        # Time to take a picture.
-                        scene_description = prompt_construction.scene_description(
-                            vlm_agent, temp_overall_task, temp_image)
-                        print(
-                            f"Using prompt {args.scene_description_prompt}, the scene description is:")
-                        print(scene_description)
-                        print("You probably want to restart the episode so you can give an appropriate first task")
-                        #sequencing_scene_description = scene_description
-
-
             skill_completion_note = ""
             if t_step > 0 and t_step % args.instruction_frequency == 0:
                 if args.sequencing_model is not None:
+                    # NOTE: This is where we would add more views.
                     assert len(
                         video) > 0, "We need to have at least one frame to check if the skill is completed"
                     current_pil_image = Image.fromarray(video[-1])
