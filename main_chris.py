@@ -89,9 +89,10 @@ class NumpyJSONEncoder(json.JSONEncoder):
 @dataclasses.dataclass
 class Args:
     # Hardware parameters
-    left_camera_id: str = "26368109"#"25455306"  # e.g., "24259877"
-    right_camera_id: str = "25455306" #"27085680"  # fix: "27085680"  move: # "26368109"
-    wrist_camera_id: str = "15512737" #"14436910"  # e.g., "13062452"
+    left_camera_id: str = "26368109"  # "25455306"  # e.g., "24259877"
+    # "27085680"  # fix: "27085680"  move: # "26368109"
+    right_camera_id: str = "25455306"
+    wrist_camera_id: str = "15512737"  # "14436910"  # e.g., "13062452"
     reset_joints: str | None = None
 
     # Policy parameters
@@ -104,7 +105,7 @@ class Args:
     max_timesteps: int = 1500
     # How many actions to execute from a predicted action chunk before querying policy server again
     # 8 is usually a good default (equals 0.5 seconds of action execution).
-    open_loop_horizon: int = 8
+    open_loop_horizon: int = 10  # Changed this to 10.
 
     # Remote server parameters
     # point this to the IP address of the policy server, e.g., "192.168.1.100"
@@ -280,42 +281,55 @@ def main(args: Args):
     scene_description = ""
     sequencing_scene_description = ""
     asked_for_description = False
+    overall_task = ""
     while True:
+        print(f"Currently, the overall task is {overall_task}")
+        temp_overall_task = input(
+            "Enter the overall task (or press 'xxx' to skip)")
+        if temp_overall_task == 'xxx':
+            pass
+        else:
+            overall_task = temp_overall_task
+        print(f"Currently, the overall task is {overall_task}")
 
         if True and args.scene_description_prompt is not None:
-            
+
             assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
 
-            temp_overall_task = input(
-                "Enter the overall task to help scene description (enter 'xxx' to skip scene generation):")
-            print("taking a dummy step")
-            if temp_overall_task == 'xxx':
-                env.step(np.zeros(8)) # for consistency
+            temp_describe_scene = input(
+                "Would you like to generate a scene description (y for yes, else no)")
+
+            # temp_overall_task = input(
+            #     "Enter the overall task to help scene description (enter 'xxx' to skip scene generation):")
+            # print("taking a dummy step")
+            if temp_describe_scene != 'y':
+                env.step(np.zeros(8))  # for consistency
             else:
-                env.step(np.zeros(8))  # Dummy step to get the first observation
+                # Dummy step to get the first observation
+                env.step(np.zeros(8))
                 # env.step(np.zeros(8))  # Dummy step to get the first observation
                 # env.step(np.zeros(8))  # Dummy step to get the first observation
-                
+
                 print("Taking a picture:")
                 temp_obs = _extract_observation(
                     args,
                     env.get_observation(),
                     save_to_disk=False,
                 )
-                temp_image = Image.fromarray(temp_obs[f"{args.external_camera}_image"])
-                print(f"Debug: the type of the picture we took is {temp_image}")
+                temp_image = Image.fromarray(
+                    temp_obs[f"{args.external_camera}_image"])
+                print(
+                    f"Debug: the type of the picture we took is {temp_image}")
                 # Time to take a picture.
                 scene_description = prompt_construction.scene_description(
-                    vlm_agent, temp_overall_task, temp_image)
+                    vlm_agent, overall_task, temp_image)
                 print(
-                    f"Using prompt {args.scene_description_prompt}, the scene description is:")
+                    f"Using prompt {args.scene_description_prompt}, and overall task {overall_task}, the scene description is:")
                 print(scene_description)
 
         sequencing_scene_description = scene_description
-        print("Just fyi, the current value of sequencing_scene_description is:")
-        print(sequencing_scene_description)
-
-
+        # print("Just fyi, the current value of sequencing_scene_description is:")
+        # print(sequencing_scene_description)
 
         instruction, future_instructions = get_instructions()
 
@@ -410,8 +424,6 @@ def main(args: Args):
 
         bar = tqdm.tqdm(range(args.max_timesteps))
         print("Running rollout... press Ctrl+C to stop early (or manually change prompt)")
-        
-
 
         # regenerate = input("If you would like us to re-generate it, please say regenerate. Or you can say override. Otherwise we will keep it")
         # if regenerate == "regenerate":
@@ -431,6 +443,16 @@ def main(args: Args):
                     assert len(
                         video) > 0, "We need to have at least one frame to check if the skill is completed"
                     current_pil_image = Image.fromarray(video[-1])
+                    current_pil_wrist_image = Image.fromarray(
+                        wrist_video[-1])
+                    # Now we need to find the previous pil_image by walking backward
+                    temp_video_idx = len(video) - 1
+                    while temp_video_idx > 0 and instructions[temp_video_idx] != instruction:
+                        temp_video_idx = temp_video_idx - 1
+                    print(
+                        f"At t={len(video)-1} we found the last time with a different instr to be t={temp_video_idx} with instr {instructions[temp_video_idx]}")
+                    previous_pil_image = Image.fromarray(video[temp_video_idx])
+
                     print(
                         f"We are querying {args.sequencing_model} to see if {instruction} is completed")
                     # TODO: Make this if-elif more reasonable
@@ -466,6 +488,18 @@ def main(args: Args):
                                 skill=instruction,
                                 current_image=current_pil_image,
                                 return_bool=True)
+                    else:  # A more general skill completion
+                        print(f"Sending overall_task as {overall_task}")
+                        is_completed_message = prompt_construction.check_skill_completion_general(
+                            agent=vlm_agent,
+                            skill=instruction,
+                            current_image=current_pil_image,
+                            current_wrist_image=current_pil_wrist_image,
+                            previous_image=previous_pil_image,
+                            overall_task=overall_task,
+                            prompt=args.sequencing_prompt,
+                            return_bool=True
+                        )
                     print(f"The VLM says: {is_completed_message}")
                     skill_completion_note = f"{args.sequencing_model} with {args.sequencing_prompt}:\n  {instruction}: {is_completed_message}"
                 if args.auto_sequencing_positive_count == 1 and not is_completed_message:
@@ -937,9 +971,13 @@ def main(args: Args):
 
         if args.feedback_model:
             # Prompt the user to input the overall task for video feedback
-            overall_task = input("Enter the overall task for video feedback (or zzz to skip): ")
+            raise NotImplementedError(
+                "We currently do not support video feedback. It would be easy to add back in, but we need to be careful about how we set the overall_task value.")
+
+            print(f"The current overall task is {overall_task}")
+            overall_task = input(
+                "Enter the overall task for video feedback (or zzz to skip): ")
             if overall_task != 'zzz':
-                
 
                 print(
                     f"Trying to query {args.feedback_model} with prompt {args.feedback_prompt} to see about the overall task {overall_task} with path {pretty_instructions_list}")

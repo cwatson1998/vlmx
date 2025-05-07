@@ -1,0 +1,24 @@
+You are an expert roboticist and reinforcement learning researcher.
+You are providing guidance to a single-armed robot with a parallel jaw gripper as it completes a tabletop manipulation task; in this case, the robot's overall task is: "<|>OVERALL_TASK<|>"
+
+The robot has decomposed this task into simpler subtasks. Your job is to tell the robot when it has successfully completed the current subtask, so it knows when it can move on to the next subtask.
+We will show you three images.
+1. **Image 1: Before skill is attempted (external camera)** This image shows a third-person view of the environment before the robot attempts the skill.
+2. **Image 2: Current image (external camera)** This image shows a third-person view of what the environment looks like currently. Your job is to say whether the current skill has been completed in this image.
+3. **Image 3: Current image (wrist camera)** This image shows a view of what the environment looks like currently, taken from a camera mounted on the robot's wrist. 
+
+When determining whether the current skill has been completed, you should pay most attention to **Image 2: Current image (external camera)**. This image provides the clearest view of what the environment looks like right now. 
+
+Alright, the current subtask is: "<|>SKILL<|>"
+
+Here are the three images:
+1. **Image 1: Before skill is attempted (external camera):**
+<|>PRE_IMAGE<|>
+
+2. **Image 2: Current image (external camera):**
+<|>CURRENT_IMAGE<|>
+
+3. **IMAGE 3: Current image (wrist camera):**
+<|>CURRENT_WRIST_IMAGE<|>
+
+Has the robot successfully completed the skill: "<<SKILL>>" in the current image? (answer 'True' or 'False')

@@ -57,6 +57,7 @@ def construct_prompt(prompt_txt_path, content_dict, special_separator="<|>"):
         # Extract key and get corresponding image
         key = prompt[next_sep + len(special_separator):end_sep]
         if key in content_dict:
+            assert content_dict[key] is not None, f"Key {key} was None in the content_dict"
             prompt_parts.append(content_dict[key])
         else:
             raise ValueError(f"Key {key} not found in content_dict")
@@ -161,6 +162,37 @@ def check_skill_completion(agent, skill, current_image, return_bool=True, scene_
     else:
         return response.text
 
+
+def check_skill_completion_general(
+        agent,
+        skill,
+        current_image,
+        current_wrist_image=None,
+        previous_image=None,
+        overall_task=None,
+        entire_plan=None,
+        prompt="skill_completion_contrastive_v2.txt",
+        return_bool=True
+):
+    prompt_txt_file = os.path.join(os.path.dirname(
+        __file__), "prompts", prompt)
+    prompt_dict = {"SKILL": skill, "CURRENT_IMAGE": current_image}
+    # This not putting things in the dict is mostly unnecessary, since None counts as an error in construct_prompt
+    if current_wrist_image is not None:
+        prompt_dict["CURRENT_WRIST_IMAGE"] = current_wrist_image
+    if previous_image is not None:
+        prompt_dict["PRE_IMAGE"] = previous_image
+    if overall_task is not None:
+        prompt_dict["OVERALL_TASK"] = overall_task
+    if entire_plan is not None:
+        entire_plan = str(entire_plan)
+        prompt_dict["ENTIRE_PLAN"] = entire_plan
+    prompt_parts = construct_prompt(prompt_txt_file, prompt_dict)
+    response = agent.generate_prediction(prompt_parts)
+    if return_bool:
+        return as_bool(response.text)
+    else:
+        return response.text
 
 
 def check_skill_sequencing_two_choices(agent, skill, current_image, next_skill, return_bool=True):
