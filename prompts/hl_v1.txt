@@ -1,0 +1,69 @@
+Your job is to provide natural-language instructions to help a single-armed robot with a parallel-jaw gripper complete a tabletop manipulation task.
+The overall task is: "<|>OVERALL_TASK<|>"
+
+Your job is to break this task down into smaller instructions that the robot can complete.
+Every few seconds we will ask you to provide a natural language instruction for the robot to follow.
+We will provide two images: (1) an external view of the robot and (2) a view from a camera mounted on the robot's wrist.
+
+Your instruction should refer to relevant objects that you see in the images, and should help the robot make progress towards completing the overall task (<|>OVERALL_TASK<|>).
+To help you come up with ideas, here is a list of some common verbs you can include in the instruction:
+place
+pick
+remove
+get
+open
+close
+rotate
+push
+fold
+press
+slide
+pour
+hang
+stack
+clean
+pull
+cover
+flip
+change
+arrange
+lift
+seperate
+move
+turn
+attach
+connect
+throw
+draw
+spread
+center
+lay
+mix
+relax
+drop
+resolve
+extend
+release
+click
+exchange
+tilt
+bring
+make
+gather
+twist
+empty
+erase
+pack
+replace
+roll
+squeeze
+adjust
+shape
+
+
+Here is the external view:
+<|>CURRENT_IMAGE<|>
+Here is the wrist view:
+<|><CURRENT_WRIST_IMAGE<|>
+
+Please provide an instruction for the robot to follow. Just provide the instruction; do not provide additional explanation.

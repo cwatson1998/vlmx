@@ -490,6 +490,7 @@ def main(args: Args):
                                 return_bool=True)
                     else:  # A more general skill completion
                         print(f"Sending overall_task as {overall_task}")
+                        hl = 'hl' in args.sequencing_prompt
                         is_completed_message = prompt_construction.check_skill_completion_general(
                             agent=vlm_agent,
                             skill=instruction,
@@ -498,11 +499,16 @@ def main(args: Args):
                             previous_image=previous_pil_image,
                             overall_task=overall_task,
                             prompt=args.sequencing_prompt,
-                            return_bool=True
+                            return_bool=not hl
                         )
+
                     print(f"The VLM says: {is_completed_message}")
                     skill_completion_note = f"{args.sequencing_model} with {args.sequencing_prompt}:\n  {instruction}: {is_completed_message}"
-                if args.auto_sequencing_positive_count == 1 and not is_completed_message:
+                if args.sequencing_prompt and 'hl' in args.sequencing_prompt:
+                    print(
+                        f"we are using hl with new instr {is_completed_message}")
+                    instruction = is_completed_message
+                elif args.auto_sequencing_positive_count == 1 and not is_completed_message:
                     assert isinstance(is_completed_message, bool)
                     print("automatically continuing since we got False")
                 elif args.auto_sequencing_positive_count == 1 and is_completed_message and len(future_instructions) > 0:
@@ -843,6 +849,8 @@ def main(args: Args):
         instructions_str = list_to_str(deduplicated_instructions)
         instructions_str = instructions_str.replace(
             " ", "_").replace("/", "_").replace("\\", "_")
+        if args.sequencing_prompt and "hl" in args.sequencing_prompt:
+            instructions_str = "HL"
 
         # Save a snapshot of the visualization before closing
         vis_snapshot_path = f"results/log/{date}/action_plot/eval_{main_category}_{instructions_str}_visualization.png"
