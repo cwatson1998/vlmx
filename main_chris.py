@@ -102,10 +102,10 @@ class Args:
     )
 
     # Rollout parameters
-    max_timesteps: int = 1500
+    max_timesteps: int = 1000
     # How many actions to execute from a predicted action chunk before querying policy server again
     # 8 is usually a good default (equals 0.5 seconds of action execution).
-    open_loop_horizon: int = 10  # Changed this to 10.
+    open_loop_horizon: int = 8  # Changed this to 10.
 
     # Remote server parameters
     # point this to the IP address of the policy server, e.g., "192.168.1.100"
@@ -447,7 +447,7 @@ def main(args: Args):
                         wrist_video[-1])
                     # Now we need to find the previous pil_image by walking backward
                     temp_video_idx = len(video) - 1
-                    while temp_video_idx > 0 and instructions[temp_video_idx] != instruction:
+                    while temp_video_idx > 0 and instructions[temp_video_idx] == instruction:
                         temp_video_idx = temp_video_idx - 1
                     print(
                         f"At t={len(video)-1} we found the last time with a different instr to be t={temp_video_idx} with instr {instructions[temp_video_idx]}")

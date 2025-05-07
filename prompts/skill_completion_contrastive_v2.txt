@@ -21,4 +21,4 @@ Here are the three images:
 3. **IMAGE 3: Current image (wrist camera):**
 <|>CURRENT_WRIST_IMAGE<|>
 
-Has the robot successfully completed the skill: "<<SKILL>>" in the current image? (answer 'True' or 'False')
+Has the robot successfully completed the skill: "<|>SKILL<|>" in the current image? (answer with a single word: 'True' or 'False').

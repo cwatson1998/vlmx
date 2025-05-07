@@ -113,6 +113,7 @@ def as_bool(my_str):
     Raises:
         ValueError: If the string cannot be converted to a boolean
     """
+    print(f"debug: checking truthiness of: {my_str}")
     # Handle string type
     if not isinstance(my_str, str):
         raise ValueError(f"Expected string, got {type(my_str)}")

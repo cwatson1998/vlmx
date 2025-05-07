@@ -6,8 +6,6 @@ We will show you three images.
 1. **Image 1: Before skill is attempted** This image shows a third-person view of the environment before the robot attempts the skill.
 2. **Image 2: Current image** This image shows a third-person view of what the environment looks like currently. Your job is to say whether the current skill has been completed in this image.
 
-When determining whether the current skill has been completed, you should pay most attention to **Image 2: Current image**, because this image shows what the environment looks like right now.
-
 Alright, the current subtask is: "<|>SKILL<|>"
 
 Here are the two images:
@@ -17,4 +15,4 @@ Here are the two images:
 2. **Image 2: Current image:**
 <|>CURRENT_IMAGE<|>
 
-Has the robot successfully completed the skill: "<<SKILL>>" in the current image? (answer 'True' or 'False')
+Has the robot successfully completed the subtask "<|>SKILL<|>" in the current image? (answer 'True' or 'False')
