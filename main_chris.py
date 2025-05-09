@@ -43,6 +43,14 @@ except ImportError:
     home_dir = os.path.expanduser("~")
     sys.path.append(os.path.join(home_dir, "chriswatson", "vlmx"))
     import prompt_construction
+try:
+    import recoloring
+except ImportError:
+    import sys
+    import os
+    home_dir = os.path.expanduser("~")
+    sys.path.append(os.path.join(home_dir, "chriswatson", "vlmx"))
+    import recoloring
 
 faulthandler.enable()
 
@@ -136,6 +144,13 @@ class Args:
     # Will use the same as the sequencing model
     scene_description_prompt: str | None = None
 
+    # RGB factors for external camera
+    # RGB multiplication factors for color adjustment
+    # external_rgb_factors: tuple[float, float, float] | None = None
+    # RGB multiplication factors for color adjustment
+    # wrist_rgb_factors: tuple[float, float, float] | None = None
+    white_rebalance: str | None = None  # Grayworld or CLAHE
+
 
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
 # waiting for a new action chunk, it will raise an exception and the server connection dies.
@@ -188,6 +203,16 @@ def get_instructions(user_message=None):
 
 
 def main(args: Args):
+    if args.white_rebalance is None:
+        def recolor_fun(x): return x
+    elif args.white_rebalance == 'grayworld':
+        recolor_fun = recoloring.apply_gray_world
+    elif args.white_rebalance == 'clahe':
+        recolor_fun = recoloring.apply_opencv_white_balance
+    else:
+        raise ValueError(
+            f"Illegal args.white_rebalance: {args.white_rebalance}")
+
     if args.sequencing_model is not None:
         load_dotenv()
         try:
@@ -283,6 +308,7 @@ def main(args: Args):
     asked_for_description = False
     overall_task = ""
     while True:
+        # Ask for overall_task.
         print(f"Currently, the overall task is {overall_task}")
         temp_overall_task = input(
             "Enter the overall task (or press 'xxx' to skip)")
@@ -292,7 +318,48 @@ def main(args: Args):
             overall_task = temp_overall_task
         print(f"Currently, the overall task is {overall_task}")
 
+        # Take some picture
+        raw_photos_taken_ndarray_list = []
+        while True:
+            maybe_photo_input = input(
+                "would you like to take a photo (and save to disk?) (y for yes)")
+            if maybe_photo_input != 'y':
+                break
+            # Taking a photo
+            env.step(np.zeros(8))
+            temp_obs = _extract_observation(
+                args,
+                env.get_observation(),
+                save_to_disk=False,
+            )
+            raw_photos_taken_ndarray_list.append(
+                temp_obs[f"{args.external_camera}_image"])
+            print(
+                f"We have a buffer of {len(raw_photos_taken_ndarray_list)} photos.")
+        photos_taken_ndarray_list = [recolor_fun(
+            e) for e in raw_photos_taken_ndarray_list]
+        if len(raw_photos_taken_ndarray_list) > 0:
+            # Save the photos to disk.
+            # Need a unique name. It should be overall task.
+            timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H:%M:%S")
+            date = datetime.datetime.now().strftime("%m%d")
+            save_dir = f"results/photos/{date}"
+            os.makedirs(save_dir, exist_ok=True)
+            for temp_i in range(len(raw_photos_taken_ndarray_list)):
+                save_filename = os.path.join(
+                    save_dir, f"{args.external_camera}_{overall_task}_{timestamp}_raw_image_{temp_i}.jpg")
+                # Convert the numpy array to an image and save it
+                img = Image.fromarray(raw_photos_taken_ndarray_list[temp_i])
+                img.save(save_filename)
+                print(f"Saved image to {save_filename}")
+                if args.white_rebalance:
+                    save_filename = f"{save_filename}/{args.white_rebalance}.jpg"
+                    img = Image.fromarray(photos_taken_ndarray_list[temp_i])
+                    img.save(save_filename)
+                    print(f"Saved recolored image to {save_filename}")
+
         if True and args.scene_description_prompt is not None:
+            # TODO: This is where we could add using all the photos.
 
             assert args.sequencing_model is not None, "I am using the sequencing model also for scene description"
 
@@ -316,8 +383,9 @@ def main(args: Args):
                     env.get_observation(),
                     save_to_disk=False,
                 )
+
                 temp_image = Image.fromarray(
-                    temp_obs[f"{args.external_camera}_image"])
+                    recolor_fun(temp_obs[f"{args.external_camera}_image"]))
                 print(
                     f"Debug: the type of the picture we took is {temp_image}")
                 # Time to take a picture.
@@ -442,16 +510,17 @@ def main(args: Args):
                     # NOTE: This is where we would add more views.
                     assert len(
                         video) > 0, "We need to have at least one frame to check if the skill is completed"
-                    current_pil_image = Image.fromarray(video[-1])
-                    current_pil_wrist_image = Image.fromarray(
-                        wrist_video[-1])
+                    current_pil_image = Image.fromarray(recolor_fun(video[-1]))
+                    current_pil_wrist_image = Image.fromarray(recolor_fun(
+                        wrist_video[-1]))
                     # Now we need to find the previous pil_image by walking backward
                     temp_video_idx = len(video) - 1
                     while temp_video_idx > 0 and instructions[temp_video_idx] == instruction:
                         temp_video_idx = temp_video_idx - 1
                     print(
                         f"At t={len(video)-1} we found the last time with a different instr to be t={temp_video_idx} with instr {instructions[temp_video_idx]}")
-                    previous_pil_image = Image.fromarray(video[temp_video_idx])
+                    previous_pil_image = Image.fromarray(
+                        recolor_fun(video[temp_video_idx]))
 
                     print(
                         f"We are querying {args.sequencing_model} to see if {instruction} is completed")
@@ -549,6 +618,7 @@ def main(args: Args):
                     save_to_disk=t_step == 0,
                 )
                 # Save both camera views
+                # Not recoloring here, we will recolor lazily.
                 video.append(curr_obs[f"{args.external_camera}_image"])
                 wrist_video.append(curr_obs["wrist_image"])
                 instructions.append(instruction)
@@ -563,15 +633,28 @@ def main(args: Args):
 
                     # We resize images on the robot laptop to minimize the amount of data sent to the policy server
                     # and improve latency.
+                    temp_exterior = recolor_fun(image_tools.resize_with_pad(
+                        curr_obs[f"{args.external_camera}_image"], 224, 224))
+                    temp_wrist = recolor_fun(image_tools.resize_with_pad(
+                        curr_obs["wrist_image"], 224, 224))
+
                     request_data = {
-                        "observation/exterior_image_1_left": image_tools.resize_with_pad(
-                            curr_obs[f"{args.external_camera}_image"], 224, 224
-                        ),
-                        "observation/wrist_image_left": image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224),
+                        "observation/exterior_image_1_left": temp_exterior,
+                        "observation/wrist_image_left": temp_wrist,
                         "observation/joint_position": curr_obs["joint_position"],
                         "observation/gripper_position": curr_obs["gripper_position"],
                         "prompt": instruction,
                     }
+
+                    # request_data = {
+                    #     "observation/exterior_image_1_left": image_tools.resize_with_pad(
+                    #         curr_obs[f"{args.external_camera}_image"], 224, 224
+                    #     ),
+                    #     "observation/wrist_image_left": image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224),
+                    #     "observation/joint_position": curr_obs["joint_position"],
+                    #     "observation/gripper_position": curr_obs["gripper_position"],
+                    #     "prompt": instruction,
+                    # }
 
                     # Wrap the server call in a context manager to prevent Ctrl+C from interrupting it
                     # Ctrl+C will be handled after the server call is complete
@@ -901,6 +984,9 @@ def main(args: Args):
         print(f"Action trunk history saved to {action_history_file}")
 
         # Stack videos side by side
+        video = [recolor_fun(e) for e in video]
+        wrist_video = [recolor_fun(e) for e in wrist_video]
+
         video = np.stack(video)
         wrist_video = np.stack(wrist_video)
 
