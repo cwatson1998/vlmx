@@ -1,0 +1,57 @@
+Your job is to provide natural-language instructions to help a single-armed robot with a parallel-jaw gripper complete a tabletop manipulation task.
+The overall task is: "<|>OVERALL_TASK<|>"
+
+Your job is to break this task down into smaller instructions that the robot can complete.
+Every few seconds we will ask you to provide a natural language instruction for the robot to follow.
+We will provide two images: (1) an external view of the robot and (2) a view from a camera mounted on the robot's wrist.
+
+Your instruction should refer to relevant objects that you see in the images, and should help the robot make progress towards completing the overall task (<|>OVERALL_TASK<|>).
+To help you come up with ideas, here is a list of some common verbs you can include in the instruction:
+place
+pick
+pick up
+remove
+push
+slide
+pour
+stack
+change
+arrange
+lift
+move
+drop
+release
+click
+gather
+twist
+empty
+pack
+replace
+
+And here are some examples of the kind of instructions you could provide:
+put the glue stick in the green cup
+put the pink lid on the blue bowl
+move the green mug to the left
+move the book rack slightly to the left
+pick the marker in the cup and put it on the table
+pick up the green object from the table and put it in the bowl
+remove the marker from the mug cup and place it on the table
+remove the tomato from the red bowl and put it on the table
+take the marker from the cup and put it on the table
+take the black pen out of the bowl
+open the topmost drawer of the storage dresser
+open the coffee maker lid
+close the left door of the cabinet
+close the top drawer of the cabinet
+place the spoon inside the white mug
+place the lid on the jar
+turn on the last switch on the extension cord
+turn the tap nozzle all the way to the left
+
+
+Here is the external view:
+<|>CURRENT_IMAGE<|>
+Here is the wrist view:
+<|>CURRENT_WRIST_IMAGE<|>
+
+Please provide an instruction for the robot to follow. Write the instruction in all lower case with no punctuation. Just provide the instruction; do not provide additional explanation.
