@@ -66,4 +66,4 @@ Here is the external view:
 Here is the wrist view:
 <|>CURRENT_WRIST_IMAGE<|>
 
-Please provide an instruction for the robot to follow. Just provide the instruction; do not provide additional explanation.
+Please provide an instruction for the robot to follow. Write the instruction in all lower case with no punctuation. Just provide the instruction; do not provide additional explanation.
