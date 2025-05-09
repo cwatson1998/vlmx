@@ -64,6 +64,6 @@ shape
 Here is the external view:
 <|>CURRENT_IMAGE<|>
 Here is the wrist view:
-<|><CURRENT_WRIST_IMAGE<|>
+<|>CURRENT_WRIST_IMAGE<|>
 
 Please provide an instruction for the robot to follow. Just provide the instruction; do not provide additional explanation.
