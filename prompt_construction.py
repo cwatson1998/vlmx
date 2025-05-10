@@ -54,15 +54,29 @@ def construct_prompt(prompt_txt_path, content_dict, special_separator="<|>"):
         if end_sep == -1:
             raise ValueError(f"Unmatched separator at position {next_sep}")
 
+        debug = False
         # Extract key and get corresponding image
         key = prompt[next_sep + len(special_separator):end_sep]
         if key in content_dict:
             assert content_dict[key] is not None, f"Key {key} was None in the content_dict"
-            prompt_parts.append(content_dict[key])
+            if isinstance(content_dict, list) or (key == "IMAGE" and 'list' in prompt_txt_path):
+                print("hackiness")
+                print("we are appending a lit")
+                for e in content_dict[key]:
+                    print("we are appending a list part")
+                    prompt_parts.append(e)
+            else:
+                # print(f"we think {key} is not a list.")
+                print(type(content_dict[key]))
+                prompt_parts.append(content_dict[key])
         else:
             raise ValueError(f"Key {key} not found in content_dict")
 
         current_pos = end_sep + len(special_separator)
+    if debug:
+        print("debug, about to print the prompt parts (triggered by including a list.)")
+        for e in prompt_parts:
+            print(e)
     return prompt_parts
 
 
@@ -276,10 +290,19 @@ def video_feedback_gemini(gemini_client, gemini_model, video, overall_task, path
     return response.text
 
 
-def scene_description(agent, overall_task, image):
+def scene_description(agent, overall_task, image, prompt="scene_description_v1.txt"):
     prompt_txt_file = os.path.join(os.path.dirname(
-        __file__), "prompts", "scene_description", "scene_description_v1.txt")
+        __file__), "prompts", "scene_description", prompt)
+    if 'list' in prompt:
+        print("debug, using a listy prompt")
+        assert isinstance(image, list)
+    else:
+        assert not isinstance(image, list)
     prompt_parts = construct_prompt(
         prompt_txt_file, {"OVERALL_TASK": overall_task, "IMAGE": image})
+    print("debug: printing prompt")
+    for e in prompt_parts:
+        print(e)
+    print("end debug")
     response = agent.generate_prediction(prompt_parts)
     return response.text
