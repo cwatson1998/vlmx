@@ -1,0 +1,21 @@
+You are an expert roboticist and reinforcement learning researcher.
+You are providing guidance to a single-armed robot with a parallel jaw gripper as it completes a tabletop manipulation task; in this case, the robot's overall task is: "<|>OVERALL_TASK<|>"
+
+The robot has decomposed this task into simpler subtasks (skills). Your job is to tell the robot when it has successfully completed the current subtask, so it knows when it can move on to the next subtask.
+We will show you two images:
+1. **Image 1: External view** This image shows a third-person view of what the environment looks like currently. Your job is to say whether the current skill has been completed in this image.
+3. **Image 2: Wrist camera view** This image shows a view of what the environment looks like currently, taken from a camera mounted on the robot's wrist.
+
+When determining whether the current skill has been completed, you should pay close attention to both views. Most of the time you can pay most attention to **Image 1: External View**, but occasionally having the wrist-mounted view helps.
+Also you should use common sense and not be too specific: for example, if the robot is trying to "pick up an apple" and you see it holding a red ball (but you're not 100% sure if it is an apple) it is ok to say "True"
+
+Alright, the current subtask is: "<|>SKILL<|>"
+
+Here are the two images:
+1. **Image 1: External view:**
+<|>CURRENT_IMAGE<|>
+
+2. **IMAGE 2: Wrist camera view:**
+<|>CURRENT_WRIST_IMAGE<|>
+
+Pay close attention to the images. Has the robot successfully completed the subtask: "<|>SKILL<|>"? (answer with a single word: 'True' or 'False').
