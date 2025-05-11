@@ -6,7 +6,7 @@ Every few seconds we will ask you to provide a natural language instruction for 
 We will provide two images: (1) an external view of the robot and (2) a view from a camera mounted on the robot's wrist.
 
 Your instruction should refer to relevant objects that you see in the images, and should help the robot make progress towards completing the overall task (<|>OVERALL_TASK<|>).
-To help you, we've prepared a list of instructions that you can choose from:
+To help you, we've prepared a list of instructions for you to choose from:
 
 pick up the blue block
 pick up the red block
