@@ -1,0 +1,45 @@
+Your job is to provide natural-language instructions to help a single-armed robot with a parallel-jaw gripper complete a tabletop manipulation task.
+The overall task is: "<|>OVERALL_TASK<|>"
+
+Your job is to break this task down into smaller instructions that the robot can complete.
+Every few seconds we will ask you to provide a natural language instruction for the robot to follow.
+We will provide two images: (1) an external view of the robot and (2) a view from a camera mounted on the robot's wrist.
+
+Your instruction should refer to relevant objects that you see in the images, and should help the robot make progress towards completing the overall task (<|>OVERALL_TASK<|>).
+To help you, we've prepared a list of instructions that you can choose from:
+
+pick up the blue block
+pick up the red block
+pick up the green block
+put the blue block on the green block
+put the blue block on the red block
+put the green block on the blue block
+put the green block on the red block
+put the red block on the blue block
+put the red block on the green block
+put the blue block on the blue plate
+put the blue block on the green plate
+put the green block on the blue plate
+put the green block on the green plate
+pick up the green cup
+pick up the gray cup
+put the green cup inside the gray cup
+put the gray cup inside the green cup
+pick up the grapes
+put the grapes on the table
+put the grapes in the bowl
+put the grapes on the plate
+pick up the bowl
+put the bowl on the plate
+pick up the spoon
+put the spoon on the plate
+pick up the mug
+put the mug on the plate
+put the spoon inside the mug
+
+Here is the external view:
+<|>CURRENT_IMAGE<|>
+Here is the wrist view:
+<|>CURRENT_WRIST_IMAGE<|>
+
+Please provide an instruction for the robot to follow. Write the instruction in all lower case with no punctuation. Just provide the instruction; do not provide additional explanation.
