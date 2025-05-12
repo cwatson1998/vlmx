@@ -206,6 +206,8 @@ def get_instructions(user_message=None):
 def main(args: Args):
     if args.white_rebalance is None:
         def recolor_fun(x): return x
+    elif args.white_rebalance == 'adaptive_grayworld':
+        recolor_fun = recoloring.apply_gray_world
     elif args.white_rebalance == 'grayworld':
         # recolor_fun = recoloring.apply_gray_world
         def recolor_fun(x):
@@ -963,6 +965,8 @@ def main(args: Args):
         deduplicated_instructions = deduplicated_list(instructions)
         pretty_instructions_list = str(deduplicated_instructions)
         instructions_str = list_to_str(deduplicated_instructions)
+        if len(instructions_str) > 100:
+            instructions_str = instructions_str[:80] + "_TRUNCATED_NAME"
         instructions_str = instructions_str.replace(
             " ", "_").replace("/", "_").replace("\\", "_")
         if args.sequencing_prompt and "hl" in args.sequencing_prompt:
