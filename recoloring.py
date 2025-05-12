@@ -22,6 +22,41 @@ def apply_manual_white_balance(image: np.ndarray, gains: tuple[float, float, flo
 
 # Alternative white balancing methods using OpenCV
 
+
+def get_gray_world_closure(initial_image):
+    """
+    Given an image, computes the gray world coefficients.
+    Instead of applying them and returning an image, it instead
+    saves them in a closure. This closure is a function : Image -> Image that
+    applies the coefficients learned from the initial image.
+    Note that the variable names suggest BGR images, but in reality this
+    works for any ordering of the channels.
+    """
+    initial_image = initial_image.copy().astype(np.float32)
+    avg_b = np.mean(initial_image[..., 0])
+    avg_g = np.mean(initial_image[..., 1])
+    avg_r = np.mean(initial_image[..., 2])
+
+    # Calculate the average gray value
+    avg_gray = (avg_b + avg_g + avg_r) / 3
+
+    # Calculate scaling factors
+    b_scale = avg_gray / avg_b
+    g_scale = avg_gray / avg_g
+    r_scale = avg_gray / avg_r
+
+    # Now generate the closure:
+
+    def apply_fixed_gray_world(image, my_b_scale=b_scale, my_g_scale=g_scale, my_r_scale=r_scale):
+        result = image.copy().astype(np.float32)
+        result[..., 0] *= my_b_scale
+        result[..., 1] *= my_g_scale
+        result[..., 2] *= my_r_scale
+        return np.clip(result, 0, 255).astype(np.uint8)
+
+    return apply_fixed_gray_world
+
+
 def apply_gray_world(image: np.ndarray) -> np.ndarray:
     """
     Applies Gray World assumption for white balancing.

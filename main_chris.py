@@ -150,6 +150,7 @@ class Args:
     # RGB multiplication factors for color adjustment
     # wrist_rgb_factors: tuple[float, float, float] | None = None
     white_rebalance: str | None = None  # Grayworld or CLAHE
+    # Updating on May 12 to only use first frame.
 
 
 # We are using Ctrl+C to optionally terminate rollouts early -- however, if we press Ctrl+C while the policy server is
@@ -206,11 +207,14 @@ def main(args: Args):
     if args.white_rebalance is None:
         def recolor_fun(x): return x
     elif args.white_rebalance == 'grayworld':
-        recolor_fun = recoloring.apply_gray_world
+        # recolor_fun = recoloring.apply_gray_world
+        def recolor_fun(x):
+            raise ValueError(
+                "You were supposed to overwrite grayworld with the fixed per episode grayworld.")
     elif args.white_rebalance == 'clahe':
         recolor_fun = recoloring.apply_opencv_white_balance
     elif args.white_rebalance == 'custom':
-        def recolor_fun(x): 
+        def recolor_fun(x):
             return recoloring.apply_manual_white_balance(x, ())
     else:
         raise ValueError(
@@ -320,6 +324,25 @@ def main(args: Args):
         else:
             overall_task = temp_overall_task
         print(f"Currently, the overall task is {overall_task}")
+
+        # Always take one picture
+        # Taking a photo
+
+        print("Taking one initial photo for internal reasons.")
+        env.step(np.zeros(8))
+        temp_obs = _extract_observation(
+            args,
+            env.get_observation(),
+            save_to_disk=False,
+        )
+        # Important for this to always exist.
+        pre_init_photo = temp_obs[f"{args.external_camera}_image"]
+        pre_init_wrist_photo = temp_obs["wrist_image"]
+        if args.white_rebalance == "grayworld":
+            recolor_fun = recoloring.get_gray_world_closure(
+                pre_init_photo)
+
+            # Now I need to update the values of the grayworld thing.
 
         # Take some picture
         raw_photos_taken_ndarray_list = []
@@ -508,14 +531,21 @@ def main(args: Args):
         #     print(sequencing_scene_description)
         for t_step in bar:
             skill_completion_note = ""
-            if (t_step > 0 and t_step % args.instruction_frequency == 0) or ('hl' in args.sequencing_prompt and t_step == 1):
+            if (t_step > 0 and t_step % args.instruction_frequency == 0) or ('hl' in args.sequencing_prompt and t_step == 0):
                 if args.sequencing_model is not None:
                     # NOTE: This is where we would add more views.
                     assert len(
                         video) > 0, "We need to have at least one frame to check if the skill is completed"
-                    current_pil_image = Image.fromarray(recolor_fun(video[-1]))
-                    current_pil_wrist_image = Image.fromarray(recolor_fun(
-                        wrist_video[-1]))
+                    if t_step == 0:
+                        current_pil_image = Image.fromarray(
+                            recolor_fun(pre_init_photo))
+                        current_pil_wrist_image = Image.fromarray(recolor_fun(
+                            pre_init_wrist_photo))
+                    else:
+                        current_pil_image = Image.fromarray(
+                            recolor_fun(video[-1]))
+                        current_pil_wrist_image = Image.fromarray(recolor_fun(
+                            wrist_video[-1]))
                     # Now we need to find the previous pil_image by walking backward
                     temp_video_idx = len(video) - 1
                     while temp_video_idx > 0 and instructions[temp_video_idx] == instruction:
