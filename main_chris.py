@@ -209,6 +209,9 @@ def main(args: Args):
         recolor_fun = recoloring.apply_gray_world
     elif args.white_rebalance == 'clahe':
         recolor_fun = recoloring.apply_opencv_white_balance
+    elif args.white_rebalance == 'custom':
+        def recolor_fun(x): 
+            return recoloring.apply_manual_white_balance(x, ())
     else:
         raise ValueError(
             f"Illegal args.white_rebalance: {args.white_rebalance}")
@@ -353,7 +356,7 @@ def main(args: Args):
                 img.save(save_filename)
                 print(f"Saved image to {save_filename}")
                 if args.white_rebalance:
-                    save_filename = f"{save_filename}/{args.white_rebalance}.jpg"
+                    save_filename = f"{save_filename}.{args.white_rebalance}.jpg"
                     img = Image.fromarray(photos_taken_ndarray_list[temp_i])
                     img.save(save_filename)
                     print(f"Saved recolored image to {save_filename}")
@@ -505,7 +508,7 @@ def main(args: Args):
         #     print(sequencing_scene_description)
         for t_step in bar:
             skill_completion_note = ""
-            if t_step > 0 and t_step % args.instruction_frequency == 0:
+            if (t_step > 0 and t_step % args.instruction_frequency == 0) or ('hl' in args.sequencing_prompt and t_step == 1):
                 if args.sequencing_model is not None:
                     # NOTE: This is where we would add more views.
                     assert len(
